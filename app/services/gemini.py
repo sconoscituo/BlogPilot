@@ -76,7 +76,7 @@ class GeminiClient:
             if system_instruction:
                 full_prompt = f"{system_instruction}\n\n---\n\n{prompt}"
 
-            response = self._model.generate_content(full_prompt)
+            response = await self._model.generate_content_async(full_prompt)
 
             if response and response.text:
                 return response.text

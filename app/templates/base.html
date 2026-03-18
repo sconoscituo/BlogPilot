@@ -11,6 +11,8 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <!-- Alpine.js for interactivity -->
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <!-- DOMPurify for XSS sanitization -->
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
 
     <script>
         tailwind.config = {
@@ -123,14 +125,14 @@
             <div class="bg-blue-800/50 rounded-lg p-3 space-y-2">
                 <p class="text-blue-300 text-xs font-semibold uppercase tracking-wider">연결 상태</p>
                 <div class="flex items-center gap-2 text-xs">
-                    <span class="w-2 h-2 rounded-full {% if settings.is_gemini_configured %}bg-green-400{% else %}bg-red-400{% endif %}"></span>
+                    <span class="w-2 h-2 rounded-full {% if gemini_configured %}bg-green-400{% else %}bg-red-400{% endif %}"></span>
                     <span class="text-blue-200">Gemini AI</span>
-                    <span class="ml-auto text-blue-300">{% if settings.is_gemini_configured %}✓{% else %}미설정{% endif %}</span>
+                    <span class="ml-auto text-blue-300">{% if gemini_configured %}✓{% else %}미설정{% endif %}</span>
                 </div>
                 <div class="flex items-center gap-2 text-xs">
-                    <span class="w-2 h-2 rounded-full {% if settings.is_wordpress_configured %}bg-green-400{% else %}bg-yellow-400{% endif %}"></span>
+                    <span class="w-2 h-2 rounded-full {% if wordpress_configured %}bg-green-400{% else %}bg-yellow-400{% endif %}"></span>
                     <span class="text-blue-200">WordPress</span>
-                    <span class="ml-auto text-blue-300">{% if settings.is_wordpress_configured %}✓{% else %}미설정{% endif %}</span>
+                    <span class="ml-auto text-blue-300">{% if wordpress_configured %}✓{% else %}미설정{% endif %}</span>
                 </div>
             </div>
         </div>

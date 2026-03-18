@@ -145,7 +145,7 @@ class PublishScheduler:
                         status=PostStatus.PUBLISHED,
                         wordpress_post_id=wp_result.get("post_id"),
                         wordpress_url=wp_result.get("url"),
-                        published_at=datetime.utcnow(),
+                        published_at=datetime.now(timezone.utc),
                         error_message=None,
                     )
                 )
@@ -157,7 +157,7 @@ class PublishScheduler:
                         .where(Schedule.id == schedule_id)
                         .values(
                             status="completed",
-                            last_run_at=datetime.utcnow(),
+                            last_run_at=datetime.now(timezone.utc),
                             run_count=Schedule.run_count + 1,
                         )
                     )
@@ -185,7 +185,7 @@ class PublishScheduler:
                             .values(
                                 status="failed",
                                 error_message=str(e),
-                                last_run_at=datetime.utcnow(),
+                                last_run_at=datetime.now(timezone.utc),
                             )
                         )
                     await db.commit()
@@ -194,7 +194,7 @@ class PublishScheduler:
 
     async def _check_pending_schedules(self):
         """대기 중인 스케줄 주기적 확인 및 처리"""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         async with AsyncSessionLocal() as db:
             try:

@@ -2,8 +2,8 @@
 발행 스케줄 모델
 자동 발행 일정을 관리합니다.
 """
-from datetime import datetime
-from sqlalchemy import String, Text, Integer, DateTime, Boolean, ForeignKey
+from datetime import datetime, timezone
+from sqlalchemy import String, Text, Integer, DateTime, Boolean, ForeignKey, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -48,9 +48,9 @@ class Schedule(Base):
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True, comment="오류 메시지")
 
     notes: Mapped[str | None] = mapped_column(Text, nullable=True, comment="메모")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime, server_default=func.now(), onupdate=func.now()
     )
 
     def __repr__(self) -> str:

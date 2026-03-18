@@ -2,12 +2,10 @@
 키워드 리서치 서비스
 네이버/구글 자동완성 API로 키워드를 수집하고 난이도를 추정합니다.
 """
-import json
 import logging
 import asyncio
 import random
 from typing import Optional
-from urllib.parse import quote
 
 import httpx
 
@@ -218,15 +216,16 @@ class KeywordResearcher:
         length = len(keyword)
         word_count = len(keyword.split())
 
-        # 기본 난이도: 길이에 반비례
+        # 기본 난이도: 길이에 반비례 (해시 기반 결정적 값)
+        hash_seed = abs(hash(keyword)) % 100
         if length <= 4:
-            base_difficulty = random.randint(70, 90)
+            base_difficulty = 70 + (hash_seed % 21)
         elif length <= 8:
-            base_difficulty = random.randint(50, 75)
+            base_difficulty = 50 + (hash_seed % 26)
         elif length <= 12:
-            base_difficulty = random.randint(30, 60)
+            base_difficulty = 30 + (hash_seed % 31)
         else:
-            base_difficulty = random.randint(10, 40)
+            base_difficulty = 10 + (hash_seed % 31)
 
         # 단어 수에 따른 조정
         if word_count >= 3:
@@ -260,20 +259,21 @@ class KeywordResearcher:
             difficulty = self._estimate_difficulty(keyword)
             # 예상 검색량 추정 (키워드 길이 기반 휴리스틱)
             length = len(keyword)
+            vol_seed = abs(hash(keyword + "_vol")) % 1000
             if length <= 4:
-                estimated_volume = random.randint(10000, 100000)
+                estimated_volume = 10000 + (vol_seed * 90)
             elif length <= 8:
-                estimated_volume = random.randint(1000, 15000)
+                estimated_volume = 1000 + (vol_seed * 14)
             elif length <= 15:
-                estimated_volume = random.randint(100, 3000)
+                estimated_volume = 100 + (vol_seed * 2) + (vol_seed % 900)
             else:
-                estimated_volume = random.randint(10, 500)
+                estimated_volume = 10 + (vol_seed % 491)
 
             results[keyword] = {
                 "difficulty": difficulty,
                 "competition_level": self._difficulty_to_level(difficulty),
                 "estimated_monthly_volume": estimated_volume,
-                "trend_score": random.randint(30, 95),
+                "trend_score": 30 + (abs(hash(keyword + "_trend")) % 66),
             }
 
         return results

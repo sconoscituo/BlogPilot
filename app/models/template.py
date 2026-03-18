@@ -2,8 +2,8 @@
 글 템플릿 모델
 Gemini 프롬프트 템플릿과 글 구조를 저장합니다.
 """
-from datetime import datetime
-from sqlalchemy import String, Text, Integer, DateTime, Boolean
+from datetime import datetime, timezone
+from sqlalchemy import String, Text, Integer, DateTime, Boolean, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -39,9 +39,9 @@ class Template(Base):
     is_default: Mapped[bool] = mapped_column(Boolean, default=False, comment="기본 템플릿 여부")
     usage_count: Mapped[int] = mapped_column(Integer, default=0, comment="사용 횟수")
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime, server_default=func.now(), onupdate=func.now()
     )
 
     def __repr__(self) -> str:

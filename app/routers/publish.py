@@ -99,11 +99,11 @@ async def publish_post(
         )
 
         # 발행 성공 처리
-        from datetime import datetime
+        from datetime import datetime, timezone
         post.status = PostStatus.PUBLISHED
         post.wordpress_post_id = wp_result.get("post_id")
         post.wordpress_url = wp_result.get("url")
-        post.published_at = datetime.utcnow()
+        post.published_at = datetime.now(timezone.utc)
         post.error_message = None
 
         await db.flush()

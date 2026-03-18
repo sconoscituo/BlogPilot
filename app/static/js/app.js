@@ -3,6 +3,24 @@
  * 모든 페이지에서 사용하는 공통 함수 모음
  */
 
+// ── XSS 방어 유틸리티 ─────────────────────────────────────────────────────────
+
+/**
+ * HTML 특수문자를 이스케이프하여 XSS 방지
+ * @param {string} str
+ * @returns {string}
+ */
+function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+
 // ── API 헬퍼 ──────────────────────────────────────────────────────────────────
 
 const api = {

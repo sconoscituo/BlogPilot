@@ -6,7 +6,6 @@ Pillow를 사용하여 블로그 썸네일을 자동으로 생성합니다.
 import logging
 import os
 import re
-import hashlib
 from typing import Optional, Tuple
 from datetime import datetime
 
@@ -73,7 +72,7 @@ class ImageGenerator:
             생성된 이미지 파일 경로
         """
         # 이미지 생성
-        img = Image.new("RGB", (THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT), color=(255, 255, 255))
+        img = Image.new("RGBA", (THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT), color=(255, 255, 255, 255))
 
         # 그라디언트 배경 그리기
         colors = custom_colors or self._get_palette_colors(post_type, title)
@@ -89,6 +88,7 @@ class ImageGenerator:
         # 파일 저장
         filename = self._generate_filename(title)
         output_path = os.path.join(self.output_dir, filename)
+        img = img.convert("RGB")
         img.save(output_path, "PNG", optimize=True)
 
         logger.info(f"썸네일 생성 완료: {output_path}")
@@ -100,7 +100,7 @@ class ImageGenerator:
         """포스트 유형과 제목 기반으로 팔레트 색상 선택"""
         palettes = COLOR_PALETTES.get(post_type, COLOR_PALETTES["informational"])
         # 제목 해시로 일관된 색상 선택
-        hash_val = int(hashlib.md5(title.encode()).hexdigest(), 16)
+        hash_val = abs(hash(title))
         palette = palettes[hash_val % len(palettes)]
         return palette
 

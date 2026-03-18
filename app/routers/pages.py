@@ -3,7 +3,7 @@ HTML 페이지 라우터
 Jinja2 템플릿을 사용하는 웹 UI 페이지 엔드포인트
 """
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
@@ -33,7 +33,7 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
     post_result = await db.execute(select(Post))
     all_posts = post_result.scalars().all()
 
-    one_week_ago = datetime.utcnow() - timedelta(days=7)
+    one_week_ago = datetime.now(timezone.utc) - timedelta(days=7)
     published = [p for p in all_posts if p.status == PostStatus.PUBLISHED]
     this_week = [p for p in published if p.published_at and p.published_at >= one_week_ago]
     pending = [p for p in all_posts if p.status in (PostStatus.GENERATED, PostStatus.SCHEDULED)]
@@ -62,7 +62,7 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
     # 주간 발행 차트 데이터 (최근 7일)
     weekly_data = []
     for i in range(6, -1, -1):
-        day = datetime.utcnow() - timedelta(days=i)
+        day = datetime.now(timezone.utc) - timedelta(days=i)
         day_start = day.replace(hour=0, minute=0, second=0, microsecond=0)
         day_end = day.replace(hour=23, minute=59, second=59)
         count = sum(
@@ -94,7 +94,8 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
             "upcoming_schedules": upcoming_schedules,
             "weekly_data": weekly_data,
             "status_dist": status_dist,
-            "settings": settings,
+            "gemini_configured": settings.is_gemini_configured,
+            "wordpress_configured": settings.is_wordpress_configured,
         },
     )
 
@@ -114,6 +115,8 @@ async def keywords_page(request: Request, db: AsyncSession = Depends(get_db)):
             "page": "keywords",
             "keywords": keywords,
             "total": len(keywords),
+            "gemini_configured": settings.is_gemini_configured,
+            "wordpress_configured": settings.is_wordpress_configured,
         },
     )
 
@@ -149,6 +152,8 @@ async def generate_page(request: Request, db: AsyncSession = Depends(get_db)):
                 {"value": "comparison", "label": "비교 글"},
                 {"value": "listicle", "label": "리스트형 글"},
             ],
+            "gemini_configured": settings.is_gemini_configured,
+            "wordpress_configured": settings.is_wordpress_configured,
         },
     )
 
@@ -175,6 +180,8 @@ async def posts_page(request: Request, db: AsyncSession = Depends(get_db)):
             "total": len(posts),
             "status_counts": status_counts,
             "is_wordpress_configured": settings.is_wordpress_configured,
+            "gemini_configured": settings.is_gemini_configured,
+            "wordpress_configured": settings.is_wordpress_configured,
         },
     )
 
@@ -182,7 +189,7 @@ async def posts_page(request: Request, db: AsyncSession = Depends(get_db)):
 @router.get("/schedules", response_class=HTMLResponse)
 async def schedules_page(request: Request, db: AsyncSession = Depends(get_db)):
     """스케줄 관리 페이지"""
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
 
     # 발행 가능한 포스트 (GENERATED 상태)
     post_result = await db.execute(
@@ -209,6 +216,8 @@ async def schedules_page(request: Request, db: AsyncSession = Depends(get_db)):
             "now": now,
             "current_year": now.year,
             "current_month": now.month,
+            "gemini_configured": settings.is_gemini_configured,
+            "wordpress_configured": settings.is_wordpress_configured,
         },
     )
 
@@ -234,5 +243,7 @@ async def templates_page(request: Request, db: AsyncSession = Depends(get_db)):
                 {"value": "comparison", "label": "비교", "icon": "🔍"},
                 {"value": "listicle", "label": "리스트형", "icon": "📋"},
             ],
+            "gemini_configured": settings.is_gemini_configured,
+            "wordpress_configured": settings.is_wordpress_configured,
         },
     )

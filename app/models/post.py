@@ -2,9 +2,9 @@
 블로그 포스트 모델
 생성된 블로그 글과 발행 상태를 관리합니다.
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum as PyEnum
-from sqlalchemy import String, Text, Integer, DateTime, Enum, ForeignKey, Boolean
+from sqlalchemy import String, Text, Integer, DateTime, Enum, ForeignKey, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -73,9 +73,9 @@ class Post(Base):
     # 발행/예약 일시
     scheduled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, comment="예약 발행 일시")
     published_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, comment="실제 발행 일시")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, comment="생성 일시")
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), comment="생성 일시")
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, comment="수정 일시"
+        DateTime, server_default=func.now(), onupdate=func.now(), comment="수정 일시"
     )
 
     # 오류 정보

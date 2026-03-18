@@ -3,7 +3,7 @@
 발행 예약 생성, 조회, 취소 엔드포인트
 """
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -87,7 +87,7 @@ async def create_schedule(
     if post.status == PostStatus.PUBLISHED:
         raise HTTPException(status_code=400, detail="이미 발행된 포스트입니다.")
 
-    if scheduled_time <= datetime.utcnow():
+    if scheduled_time <= datetime.now(timezone.utc):
         raise HTTPException(status_code=400, detail="예약 시간은 현재 시간 이후여야 합니다.")
 
     # 스케줄 생성
@@ -204,7 +204,7 @@ async def reschedule(
     db: AsyncSession = Depends(get_db),
 ):
     """스케줄 시간 변경"""
-    if new_time <= datetime.utcnow():
+    if new_time <= datetime.now(timezone.utc):
         raise HTTPException(status_code=400, detail="새 예약 시간은 현재 시간 이후여야 합니다.")
 
     result = await db.execute(select(Schedule).where(Schedule.id == schedule_id))

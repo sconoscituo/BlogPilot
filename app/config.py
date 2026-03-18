@@ -3,6 +3,7 @@ BlogPilot 설정 관리 모듈
 환경 변수를 읽어 애플리케이션 설정을 제공합니다.
 """
 import os
+import secrets
 from functools import lru_cache
 from dotenv import load_dotenv
 
@@ -16,7 +17,7 @@ class Settings:
     APP_NAME: str = "BlogPilot"
     APP_VERSION: str = "1.0.0"
     DEBUG: bool = os.getenv("DEBUG", "True").lower() == "true"
-    SECRET_KEY: str = os.getenv("APP_SECRET_KEY", "blogpilot-secret-key-change-in-production")
+    SECRET_KEY: str = os.getenv("APP_SECRET_KEY", secrets.token_urlsafe(32))
 
     # 데이터베이스 설정
     DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./blogpilot.db")

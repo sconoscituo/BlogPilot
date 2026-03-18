@@ -158,8 +158,8 @@ async def get_post_stats(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Post))
     all_posts = result.scalars().all()
 
-    from datetime import datetime, timedelta
-    one_week_ago = datetime.utcnow() - timedelta(days=7)
+    from datetime import datetime, timedelta, timezone
+    one_week_ago = datetime.now(timezone.utc) - timedelta(days=7)
 
     total = len(all_posts)
     published = [p for p in all_posts if p.status == PostStatus.PUBLISHED]

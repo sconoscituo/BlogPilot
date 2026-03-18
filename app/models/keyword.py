@@ -2,8 +2,8 @@
 키워드 모델
 리서치된 키워드와 관련 데이터를 저장합니다.
 """
-from datetime import datetime
-from sqlalchemy import String, Text, Integer, DateTime, Float, Boolean
+from datetime import datetime, timezone
+from sqlalchemy import String, Text, Integer, DateTime, Float, Boolean, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -40,9 +40,9 @@ class Keyword(Base):
 
     # 메타 정보
     notes: Mapped[str | None] = mapped_column(Text, nullable=True, comment="메모")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime, server_default=func.now(), onupdate=func.now()
     )
 
     def __repr__(self) -> str:

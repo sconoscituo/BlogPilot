@@ -2,7 +2,6 @@
 키워드 리서치 API 라우터
 키워드 조회, 리서치, 관리 엔드포인트
 """
-import json
 import logging
 from typing import Optional
 
@@ -142,6 +141,25 @@ async def analyze_keyword_trends(
     return results
 
 
+@router.get("/stats/summary")
+async def get_keyword_stats(db: AsyncSession = Depends(get_db)):
+    """키워드 통계 요약"""
+    total = await db.execute(select(Keyword))
+    all_kw = total.scalars().all()
+
+    used = [k for k in all_kw if k.is_used]
+    active = [k for k in all_kw if k.is_active]
+    low_difficulty = [k for k in all_kw if k.difficulty_score and k.difficulty_score <= 30]
+
+    return {
+        "total": len(all_kw),
+        "active": len(active),
+        "used": len(used),
+        "unused": len(active) - len(used),
+        "low_difficulty": len(low_difficulty),
+    }
+
+
 @router.get("/{keyword_id}", response_model=KeywordResponse)
 async def get_keyword(
     keyword_id: int,
@@ -188,22 +206,3 @@ async def delete_keyword(
         raise HTTPException(status_code=404, detail="키워드를 찾을 수 없습니다.")
 
     await db.delete(keyword)
-
-
-@router.get("/stats/summary")
-async def get_keyword_stats(db: AsyncSession = Depends(get_db)):
-    """키워드 통계 요약"""
-    total = await db.execute(select(Keyword))
-    all_kw = total.scalars().all()
-
-    used = [k for k in all_kw if k.is_used]
-    active = [k for k in all_kw if k.is_active]
-    low_difficulty = [k for k in all_kw if k.difficulty_score and k.difficulty_score <= 30]
-
-    return {
-        "total": len(all_kw),
-        "active": len(active),
-        "used": len(used),
-        "unused": len(active) - len(used),
-        "low_difficulty": len(low_difficulty),
-    }
