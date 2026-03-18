@@ -1,0 +1,37 @@
+version: '3.9'
+
+services:
+  blogpilot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: blogpilot-app
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - WORDPRESS_URL=${WORDPRESS_URL}
+      - WORDPRESS_USERNAME=${WORDPRESS_USERNAME}
+      - WORDPRESS_APP_PASSWORD=${WORDPRESS_APP_PASSWORD}
+      - APP_SECRET_KEY=${APP_SECRET_KEY:-blogpilot-secret-change-me}
+      - DEBUG=${DEBUG:-False}
+      - DATABASE_URL=sqlite+aiosqlite:////app/data/blogpilot.db
+      - SCHEDULER_TIMEZONE=${SCHEDULER_TIMEZONE:-Asia/Seoul}
+    volumes:
+      # 데이터베이스 영속화
+      - blogpilot-data:/app/data
+      # 생성된 이미지 영속화
+      - blogpilot-images:/app/generated_images
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/health').raise_for_status()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  blogpilot-data:
+    driver: local
+  blogpilot-images:
+    driver: local

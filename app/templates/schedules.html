@@ -1,0 +1,279 @@
+{% extends "base.html" %}
+
+{% block title %}발행 스케줄{% endblock %}
+{% block page_title %}발행 스케줄{% endblock %}
+{% block page_subtitle %}자동 발행 일정을 설정하고 관리하세요{% endblock %}
+
+{% block content %}
+<div x-data="scheduleApp()" x-init="init()">
+
+<div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+
+    <!-- 왼쪽: 스케줄 추가 폼 -->
+    <div class="xl:col-span-1 space-y-4">
+        <div class="card">
+            <h2 class="font-semibold text-gray-900 mb-4">➕ 발행 예약 추가</h2>
+
+            <div class="space-y-3">
+                <div>
+                    <label class="label">발행할 포스트 *</label>
+                    <select x-model="form.post_id" class="input">
+                        <option value="">포스트 선택...</option>
+                        {% for post in publishable_posts %}
+                        <option value="{{ post.id }}">
+                            {{ (post.title or post.primary_keyword)[:40] }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    {% if not publishable_posts %}
+                    <p class="text-xs text-yellow-600 mt-1">
+                        ⚠️ 발행 가능한 포스트가 없습니다.
+                        <a href="/generate" class="underline">글을 먼저 생성하세요</a>
+                    </p>
+                    {% endif %}
+                </div>
+
+                <div>
+                    <label class="label">예약 날짜/시간 *</label>
+                    <input type="datetime-local" x-model="form.scheduled_time" class="input"
+                           :min="minDateTime">
+                </div>
+
+                <div>
+                    <label class="label">스케줄 이름</label>
+                    <input type="text" x-model="form.name" class="input"
+                           placeholder="자동 생성됩니다 (선택)">
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <input type="checkbox" x-model="form.is_recurring" id="isRecurring" class="rounded text-blue-600">
+                    <label for="isRecurring" class="text-sm text-gray-700">반복 스케줄</label>
+                </div>
+
+                <div x-show="form.is_recurring">
+                    <label class="label">반복 패턴</label>
+                    <select x-model="form.recurrence_pattern" class="input">
+                        <option value="daily">매일</option>
+                        <option value="weekly">매주</option>
+                        <option value="monthly">매월</option>
+                    </select>
+                </div>
+            </div>
+
+            <button @click="addSchedule()" :disabled="!form.post_id || !form.scheduled_time"
+                    class="w-full mt-4 btn-primary justify-center py-2.5 disabled:opacity-50">
+                📅 예약 추가
+            </button>
+        </div>
+
+        <!-- APScheduler Job 현황 -->
+        <div class="card">
+            <div class="flex items-center justify-between mb-3">
+                <h2 class="font-semibold text-gray-900 text-sm">⚙️ 스케줄러 상태</h2>
+                <button @click="loadJobs()" class="text-xs text-blue-600 hover:underline">새로고침</button>
+            </div>
+            <template x-if="jobs.length === 0">
+                <p class="text-sm text-gray-400 text-center py-2">활성 Job 없음</p>
+            </template>
+            <div class="space-y-2">
+                <template x-for="job in jobs" :key="job.id">
+                    <div class="bg-gray-50 rounded-lg p-2 text-xs">
+                        <p class="font-medium text-gray-700 truncate" x-text="job.id"></p>
+                        <p class="text-gray-500 mt-0.5" x-text="'다음 실행: ' + (job.next_run_time || '없음')"></p>
+                    </div>
+                </template>
+            </div>
+            <p class="text-xs text-gray-400 mt-2 text-center" x-text="'총 ' + jobs.length + '개 Job'"></p>
+        </div>
+    </div>
+
+    <!-- 오른쪽: 캘린더 + 스케줄 목록 -->
+    <div class="xl:col-span-2 space-y-6">
+
+        <!-- 월별 캘린더 -->
+        <div class="card">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="font-semibold text-gray-900">📅 발행 캘린더</h2>
+                <div class="flex items-center gap-2">
+                    <button @click="prevMonth()" class="p-1 rounded hover:bg-gray-100">◀</button>
+                    <span class="text-sm font-medium text-gray-700" x-text="currentYear + '년 ' + currentMonth + '월'"></span>
+                    <button @click="nextMonth()" class="p-1 rounded hover:bg-gray-100">▶</button>
+                </div>
+            </div>
+
+            <!-- 캘린더 그리드 -->
+            <div class="grid grid-cols-7 gap-1 mb-2">
+                <template x-for="day in ['일','월','화','수','목','금','토']">
+                    <div class="text-center text-xs text-gray-400 font-medium py-1" x-text="day"></div>
+                </template>
+            </div>
+            <div class="grid grid-cols-7 gap-1">
+                <!-- 시작 빈칸 -->
+                <template x-for="_ in startBlanks">
+                    <div class="h-12"></div>
+                </template>
+                <!-- 날짜 셀 -->
+                <template x-for="day in daysInMonth" :key="day">
+                    <div :class="{
+                            'bg-blue-600 text-white': day === today,
+                            'bg-gray-50 hover:bg-gray-100': day !== today,
+                            'ring-2 ring-green-400': calendarData[day] && calendarData[day].length > 0
+                         }"
+                         class="h-12 rounded-lg flex flex-col items-center justify-center cursor-pointer transition text-sm">
+                        <span :class="day === today ? 'font-bold' : 'text-gray-700'" x-text="day"></span>
+                        <template x-if="calendarData[day] && calendarData[day].length > 0">
+                            <span class="w-1.5 h-1.5 bg-green-400 rounded-full mt-0.5"></span>
+                        </template>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        <!-- 스케줄 목록 -->
+        <div class="card">
+            <h2 class="font-semibold text-gray-900 mb-4">📋 전체 스케줄 목록</h2>
+
+            {% if schedules %}
+            <div class="space-y-3">
+                {% for schedule in schedules %}
+                <div class="flex items-center gap-4 p-3 bg-gray-50 rounded-xl border border-gray-100 hover:border-blue-200 transition">
+                    <!-- 날짜 -->
+                    <div class="w-14 h-14 bg-blue-50 rounded-xl flex flex-col items-center justify-center flex-shrink-0 border border-blue-100">
+                        <span class="text-xs font-bold text-blue-700">{{ schedule.scheduled_time.strftime('%m/%d') }}</span>
+                        <span class="text-xs text-blue-500 mt-0.5">{{ schedule.scheduled_time.strftime('%H:%M') }}</span>
+                    </div>
+
+                    <!-- 정보 -->
+                    <div class="flex-1 min-w-0">
+                        <p class="font-medium text-gray-900 truncate">{{ schedule.name }}</p>
+                        <div class="flex items-center gap-2 mt-1">
+                            {% if schedule.status == 'pending' %}
+                            <span class="badge badge-yellow">⏳ 대기 중</span>
+                            {% elif schedule.status == 'completed' %}
+                            <span class="badge badge-green">✓ 완료</span>
+                            {% elif schedule.status == 'failed' %}
+                            <span class="badge badge-red">✗ 실패</span>
+                            {% elif schedule.status == 'cancelled' %}
+                            <span class="badge badge-gray">취소됨</span>
+                            {% endif %}
+                            {% if schedule.is_recurring %}
+                            <span class="badge badge-purple">🔄 반복</span>
+                            {% endif %}
+                            <span class="text-xs text-gray-400">실행 {{ schedule.run_count }}회</span>
+                        </div>
+                        {% if schedule.error_message %}
+                        <p class="text-xs text-red-500 mt-1">{{ schedule.error_message[:60] }}</p>
+                        {% endif %}
+                    </div>
+
+                    <!-- 액션 -->
+                    {% if schedule.status == 'pending' %}
+                    <button onclick="cancelSchedule({{ schedule.id }})"
+                            class="btn-danger text-xs py-1.5 flex-shrink-0">취소</button>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="text-center py-10 text-gray-400">
+                <p class="text-4xl mb-2">📅</p>
+                <p class="text-sm font-medium text-gray-500">예약된 스케줄이 없습니다</p>
+                <p class="text-xs mt-1">왼쪽에서 발행 예약을 추가해보세요</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+</div><!-- x-data end -->
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function scheduleApp() {
+    return {
+        form: {
+            post_id: '',
+            scheduled_time: '',
+            name: '',
+            is_recurring: false,
+            recurrence_pattern: 'weekly',
+        },
+        currentYear: {{ current_year }},
+        currentMonth: {{ current_month }},
+        today: new Date().getDate(),
+        daysInMonth: [],
+        startBlanks: [],
+        calendarData: {},
+        jobs: [],
+        minDateTime: new Date(Date.now() + 60000).toISOString().slice(0, 16),
+
+        init() {
+            this.updateCalendar();
+            this.loadJobs();
+        },
+
+        async updateCalendar() {
+            const res = await fetch(`/api/schedules/calendar?year=${this.currentYear}&month=${this.currentMonth}`);
+            const data = await res.json();
+            this.calendarData = data.days || {};
+
+            const firstDay = new Date(this.currentYear, this.currentMonth - 1, 1).getDay();
+            const last = new Date(this.currentYear, this.currentMonth, 0).getDate();
+            this.startBlanks = Array(firstDay).fill(0);
+            this.daysInMonth = Array.from({length: last}, (_, i) => i + 1);
+        },
+
+        prevMonth() {
+            if (this.currentMonth === 1) { this.currentMonth = 12; this.currentYear--; }
+            else this.currentMonth--;
+            this.updateCalendar();
+        },
+
+        nextMonth() {
+            if (this.currentMonth === 12) { this.currentMonth = 1; this.currentYear++; }
+            else this.currentMonth++;
+            this.updateCalendar();
+        },
+
+        async loadJobs() {
+            try {
+                const res = await api.get('/api/schedules/jobs');
+                this.jobs = res.jobs || [];
+            } catch(e) { this.jobs = []; }
+        },
+
+        async addSchedule() {
+            if (!this.form.post_id || !this.form.scheduled_time) return;
+            try {
+                const params = new URLSearchParams({
+                    post_id: this.form.post_id,
+                    scheduled_time: this.form.scheduled_time + ':00',
+                });
+                if (this.form.name) params.append('name', this.form.name);
+                if (this.form.is_recurring) {
+                    params.append('is_recurring', 'true');
+                    params.append('recurrence_pattern', this.form.recurrence_pattern);
+                }
+                await api.post('/api/schedules/?' + params.toString());
+                showToast('발행 예약 완료!', 'success');
+                setTimeout(() => location.reload(), 1000);
+            } catch(e) {
+                showToast('예약 실패: ' + e.message, 'error');
+            }
+        }
+    };
+}
+
+async function cancelSchedule(id) {
+    if (!confirm('이 스케줄을 취소하시겠습니까?')) return;
+    try {
+        await api.delete(`/api/schedules/${id}`);
+        showToast('스케줄 취소 완료', 'success');
+        setTimeout(() => location.reload(), 600);
+    } catch(e) {
+        showToast('취소 실패', 'error');
+    }
+}
+</script>
+{% endblock %}

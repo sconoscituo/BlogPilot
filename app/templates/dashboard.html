@@ -1,0 +1,230 @@
+{% extends "base.html" %}
+
+{% block title %}대시보드{% endblock %}
+{% block page_title %}대시보드{% endblock %}
+{% block page_subtitle %}AI 블로그 자동화 현황을 한눈에 확인하세요{% endblock %}
+
+{% block content %}
+<!-- 주요 지표 카드 -->
+<div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+
+    <div class="card flex items-center gap-4">
+        <div class="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center text-2xl flex-shrink-0">📝</div>
+        <div>
+            <p class="text-sm text-gray-500">총 발행 글</p>
+            <p class="text-3xl font-bold text-gray-900">{{ published_count }}</p>
+            <p class="text-xs text-gray-400 mt-0.5">전체 {{ total_posts }}개 중</p>
+        </div>
+    </div>
+
+    <div class="card flex items-center gap-4">
+        <div class="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center text-2xl flex-shrink-0">🚀</div>
+        <div>
+            <p class="text-sm text-gray-500">이번 주 발행</p>
+            <p class="text-3xl font-bold text-green-600">{{ this_week_count }}</p>
+            <p class="text-xs text-gray-400 mt-0.5">최근 7일</p>
+        </div>
+    </div>
+
+    <div class="card flex items-center gap-4">
+        <div class="w-12 h-12 bg-yellow-100 rounded-xl flex items-center justify-center text-2xl flex-shrink-0">⏳</div>
+        <div>
+            <p class="text-sm text-gray-500">대기 중인 글</p>
+            <p class="text-3xl font-bold text-yellow-600">{{ pending_count }}</p>
+            <p class="text-xs text-gray-400 mt-0.5">생성됨 + 예약됨</p>
+        </div>
+    </div>
+
+    <div class="card flex items-center gap-4">
+        <div class="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center text-2xl flex-shrink-0">🔑</div>
+        <div>
+            <p class="text-sm text-gray-500">키워드 파이프라인</p>
+            <p class="text-3xl font-bold text-purple-600">{{ unused_keyword_count }}</p>
+            <p class="text-xs text-gray-400 mt-0.5">미사용 / 전체 {{ keyword_count }}개</p>
+        </div>
+    </div>
+</div>
+
+<!-- 차트 행 -->
+<div class="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-6">
+
+    <!-- 주간 발행 현황 차트 -->
+    <div class="card xl:col-span-2">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="font-semibold text-gray-900">📈 최근 7일 발행 현황</h2>
+            <span class="badge badge-blue">일별 통계</span>
+        </div>
+        <canvas id="weeklyChart" height="100"></canvas>
+    </div>
+
+    <!-- 상태 분포 도넛 차트 -->
+    <div class="card">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="font-semibold text-gray-900">📊 포스트 상태 분포</h2>
+        </div>
+        <canvas id="statusChart" height="200"></canvas>
+        <div class="mt-4 space-y-2">
+            {% for label, count in status_dist.items() %}
+            <div class="flex items-center justify-between text-sm">
+                <span class="text-gray-600">{{ label }}</span>
+                <span class="font-semibold text-gray-900">{{ count }}</span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<!-- 하단 행 -->
+<div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+
+    <!-- 최근 발행 글 -->
+    <div class="card">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="font-semibold text-gray-900">📰 최근 발행 글</h2>
+            <a href="/posts" class="text-sm text-blue-600 hover:underline">전체 보기 →</a>
+        </div>
+
+        {% if recent_posts %}
+        <div class="space-y-3">
+            {% for post in recent_posts %}
+            <div class="flex items-start gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition">
+                <div class="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center text-sm flex-shrink-0">
+                    {% if post.post_type == 'review' %}⭐
+                    {% elif post.post_type == 'comparison' %}🔍
+                    {% elif post.post_type == 'listicle' %}📋
+                    {% else %}📝{% endif %}
+                </div>
+                <div class="flex-1 min-w-0">
+                    <p class="text-sm font-medium text-gray-900 truncate">{{ post.title or post.primary_keyword }}</p>
+                    <div class="flex items-center gap-2 mt-1">
+                        <span class="text-xs text-gray-500">{{ post.primary_keyword }}</span>
+                        {% if post.seo_score %}
+                        <span class="text-xs font-medium {% if post.seo_score >= 70 %}text-green-600{% elif post.seo_score >= 50 %}text-yellow-600{% else %}text-red-600{% endif %}">
+                            SEO {{ post.seo_score }}점
+                        </span>
+                        {% endif %}
+                    </div>
+                </div>
+                {% if post.wordpress_url %}
+                <a href="{{ post.wordpress_url }}" target="_blank"
+                   class="text-xs text-blue-600 hover:underline flex-shrink-0">보기 →</a>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="text-center py-8 text-gray-400">
+            <p class="text-4xl mb-2">📭</p>
+            <p class="text-sm">발행된 글이 없습니다</p>
+            <a href="/generate" class="btn-primary mt-3 inline-flex">첫 글 생성하기</a>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- 다가오는 스케줄 -->
+    <div class="card">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="font-semibold text-gray-900">📅 다가오는 스케줄</h2>
+            <a href="/schedules" class="text-sm text-blue-600 hover:underline">전체 보기 →</a>
+        </div>
+
+        {% if upcoming_schedules %}
+        <div class="space-y-3">
+            {% for schedule in upcoming_schedules %}
+            <div class="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                <div class="w-12 h-12 bg-blue-50 rounded-lg flex flex-col items-center justify-center flex-shrink-0">
+                    <span class="text-xs font-bold text-blue-700">{{ schedule.scheduled_time.strftime('%m/%d') }}</span>
+                    <span class="text-xs text-blue-500">{{ schedule.scheduled_time.strftime('%H:%M') }}</span>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <p class="text-sm font-medium text-gray-900 truncate">{{ schedule.name }}</p>
+                    <span class="badge badge-yellow text-xs mt-1">예약됨</span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="text-center py-8 text-gray-400">
+            <p class="text-4xl mb-2">📅</p>
+            <p class="text-sm">예약된 발행이 없습니다</p>
+            <a href="/schedules" class="btn-secondary mt-3 inline-flex">스케줄 추가</a>
+        </div>
+        {% endif %}
+
+        <!-- 빠른 액션 -->
+        <div class="mt-4 pt-4 border-t border-gray-100 grid grid-cols-2 gap-2">
+            <a href="/keywords" class="btn-secondary justify-center">
+                🔑 키워드 추가
+            </a>
+            <a href="/generate" class="btn-primary justify-center">
+                🤖 글 생성
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// 주간 발행 현황 차트
+const weeklyCtx = document.getElementById('weeklyChart').getContext('2d');
+const weeklyData = {{ weekly_data | tojson }};
+
+new Chart(weeklyCtx, {
+    type: 'bar',
+    data: {
+        labels: weeklyData.map(d => d.date),
+        datasets: [{
+            label: '발행 수',
+            data: weeklyData.map(d => d.count),
+            backgroundColor: 'rgba(59, 130, 246, 0.7)',
+            borderColor: 'rgba(59, 130, 246, 1)',
+            borderWidth: 2,
+            borderRadius: 6,
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: {
+            legend: { display: false },
+            tooltip: {
+                callbacks: {
+                    label: (ctx) => `발행: ${ctx.raw}개`
+                }
+            }
+        },
+        scales: {
+            y: {
+                beginAtZero: true,
+                ticks: { stepSize: 1, precision: 0 },
+                grid: { color: 'rgba(0,0,0,0.05)' }
+            },
+            x: { grid: { display: false } }
+        }
+    }
+});
+
+// 상태 분포 차트
+const statusCtx = document.getElementById('statusChart').getContext('2d');
+const statusData = {{ status_dist | tojson }};
+
+new Chart(statusCtx, {
+    type: 'doughnut',
+    data: {
+        labels: Object.keys(statusData),
+        datasets: [{
+            data: Object.values(statusData),
+            backgroundColor: ['#10b981','#f59e0b','#6366f1','#ef4444'],
+            borderWidth: 0,
+        }]
+    },
+    options: {
+        responsive: true,
+        cutout: '65%',
+        plugins: {
+            legend: { position: 'bottom', labels: { padding: 15, font: { size: 11 } } }
+        }
+    }
+});
+</script>
+{% endblock %}

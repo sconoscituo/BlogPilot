@@ -1,0 +1,321 @@
+{% extends "base.html" %}
+
+{% block title %}키워드 리서치{% endblock %}
+{% block page_title %}키워드 리서치{% endblock %}
+{% block page_subtitle %}네이버/구글 자동완성으로 SEO 키워드를 발굴하세요{% endblock %}
+
+{% block header_actions %}
+<button onclick="openAddModal()" class="btn-secondary">
+    ➕ 수동 추가
+</button>
+{% endblock %}
+
+{% block content %}
+<div x-data="keywordApp()" x-init="init()">
+
+<!-- 리서치 패널 -->
+<div class="card mb-6">
+    <h2 class="font-semibold text-gray-900 mb-4">🔍 키워드 리서치</h2>
+    <div class="flex gap-3">
+        <input type="text" x-model="seedKeyword" @keyup.enter="research()"
+               placeholder="시드 키워드 입력 (예: 다이어트 방법)"
+               class="input flex-1">
+        <div class="flex items-center gap-2">
+            <label class="flex items-center gap-1.5 text-sm text-gray-600">
+                <input type="checkbox" x-model="sources" value="google" checked class="rounded"> 구글
+            </label>
+            <label class="flex items-center gap-1.5 text-sm text-gray-600">
+                <input type="checkbox" x-model="sources" value="naver" checked class="rounded"> 네이버
+            </label>
+        </div>
+        <button @click="research()" :disabled="loading || !seedKeyword"
+                class="btn-primary disabled:opacity-50 disabled:cursor-not-allowed min-w-[120px]">
+            <span x-show="!loading">🔍 리서치</span>
+            <span x-show="loading" class="flex items-center gap-2">
+                <span class="spinner"></span> 분석 중...
+            </span>
+        </button>
+        <button @click="researchAndSave()" :disabled="loading || !seedKeyword"
+                class="btn-success disabled:opacity-50 min-w-[120px]">
+            💾 리서치 + 저장
+        </button>
+    </div>
+
+    <!-- 리서치 결과 -->
+    <div x-show="suggestions.length > 0" class="mt-4">
+        <div class="flex items-center justify-between mb-3">
+            <p class="text-sm font-medium text-gray-700">
+                리서치 결과: <span class="text-blue-600 font-bold" x-text="suggestions.length"></span>개 키워드 발견
+            </p>
+            <button @click="saveSelected()" :disabled="selectedSuggestions.length === 0"
+                    class="btn-primary text-xs disabled:opacity-50">
+                선택 저장 (<span x-text="selectedSuggestions.length"></span>개)
+            </button>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-80 overflow-y-auto">
+            <template x-for="kw in suggestions" :key="kw.keyword">
+                <div class="flex items-center gap-2 p-2.5 bg-gray-50 rounded-lg hover:bg-blue-50 cursor-pointer border border-transparent hover:border-blue-200 transition"
+                     @click="toggleSuggestion(kw)">
+                    <input type="checkbox" :checked="selectedSuggestions.includes(kw.keyword)"
+                           class="rounded text-blue-600" @click.stop>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm font-medium text-gray-900 truncate" x-text="kw.keyword"></p>
+                        <div class="flex items-center gap-1.5 mt-0.5">
+                            <span class="text-xs text-gray-400" x-text="kw.source"></span>
+                            <span x-show="kw.is_long_tail" class="badge badge-purple text-xs">롱테일</span>
+                            <span :class="{
+                                'badge-green': kw.competition_level === 'low',
+                                'badge-yellow': kw.competition_level === 'medium',
+                                'badge-red': kw.competition_level === 'high'
+                            }" class="badge text-xs" x-text="
+                                kw.competition_level === 'low' ? '쉬움' :
+                                kw.competition_level === 'medium' ? '보통' : '어려움'
+                            "></span>
+                        </div>
+                    </div>
+                    <span class="text-xs font-bold text-gray-500 flex-shrink-0"
+                          x-text="kw.estimated_difficulty + '점'"></span>
+                </div>
+            </template>
+        </div>
+    </div>
+</div>
+
+<!-- 저장된 키워드 목록 -->
+<div class="card">
+    <div class="flex items-center justify-between mb-4">
+        <h2 class="font-semibold text-gray-900">
+            💾 저장된 키워드
+            <span class="text-gray-400 font-normal text-sm ml-1">({{ total }}개)</span>
+        </h2>
+        <div class="flex items-center gap-2">
+            <select x-model="filterStatus" @change="filterKeywords()" class="input w-auto text-xs">
+                <option value="">전체</option>
+                <option value="unused">미사용</option>
+                <option value="used">사용됨</option>
+            </select>
+        </div>
+    </div>
+
+    {% if keywords %}
+    <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+            <thead>
+                <tr class="border-b border-gray-100">
+                    <th class="text-left py-3 px-2 text-gray-500 font-medium">키워드</th>
+                    <th class="text-left py-3 px-2 text-gray-500 font-medium">출처</th>
+                    <th class="text-center py-3 px-2 text-gray-500 font-medium">난이도</th>
+                    <th class="text-center py-3 px-2 text-gray-500 font-medium">경쟁도</th>
+                    <th class="text-center py-3 px-2 text-gray-500 font-medium">우선순위</th>
+                    <th class="text-center py-3 px-2 text-gray-500 font-medium">상태</th>
+                    <th class="text-right py-3 px-2 text-gray-500 font-medium">액션</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-50">
+                {% for kw in keywords %}
+                <tr class="hover:bg-gray-50 transition">
+                    <td class="py-3 px-2">
+                        <div class="font-medium text-gray-900">{{ kw.keyword }}</div>
+                        {% if kw.notes %}
+                        <div class="text-xs text-gray-400 mt-0.5">{{ kw.notes }}</div>
+                        {% endif %}
+                    </td>
+                    <td class="py-3 px-2">
+                        <span class="badge badge-blue">{{ kw.source or 'manual' }}</span>
+                    </td>
+                    <td class="py-3 px-2 text-center">
+                        {% if kw.difficulty_score %}
+                        <div class="flex items-center justify-center gap-1">
+                            <div class="w-16 bg-gray-200 rounded-full h-1.5">
+                                <div class="h-1.5 rounded-full {% if kw.difficulty_score <= 30 %}bg-green-500{% elif kw.difficulty_score <= 60 %}bg-yellow-500{% else %}bg-red-500{% endif %}"
+                                     style="width: {{ kw.difficulty_score }}%"></div>
+                            </div>
+                            <span class="text-xs font-medium text-gray-600">{{ kw.difficulty_score }}</span>
+                        </div>
+                        {% else %}
+                        <span class="text-gray-400">-</span>
+                        {% endif %}
+                    </td>
+                    <td class="py-3 px-2 text-center">
+                        {% if kw.competition_level == 'low' %}
+                        <span class="badge badge-green">낮음</span>
+                        {% elif kw.competition_level == 'medium' %}
+                        <span class="badge badge-yellow">보통</span>
+                        {% elif kw.competition_level == 'high' %}
+                        <span class="badge badge-red">높음</span>
+                        {% else %}
+                        <span class="text-gray-400 text-xs">-</span>
+                        {% endif %}
+                    </td>
+                    <td class="py-3 px-2 text-center">
+                        <span class="text-sm font-medium text-gray-700">{{ kw.priority }}</span>
+                    </td>
+                    <td class="py-3 px-2 text-center">
+                        {% if kw.is_used %}
+                        <span class="badge badge-gray">사용됨</span>
+                        {% else %}
+                        <span class="badge badge-green">대기</span>
+                        {% endif %}
+                    </td>
+                    <td class="py-3 px-2 text-right">
+                        <div class="flex items-center justify-end gap-1">
+                            <a href="/generate?keyword={{ kw.keyword }}"
+                               class="text-xs text-blue-600 hover:underline px-2 py-1 rounded hover:bg-blue-50">글 생성</a>
+                            <button onclick="deleteKeyword({{ kw.id }})"
+                                    class="text-xs text-red-500 hover:underline px-2 py-1 rounded hover:bg-red-50">삭제</button>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="text-center py-12 text-gray-400">
+        <p class="text-5xl mb-3">🔑</p>
+        <p class="font-medium text-gray-600">저장된 키워드가 없습니다</p>
+        <p class="text-sm mt-1">위에서 시드 키워드를 입력하고 리서치해보세요!</p>
+    </div>
+    {% endif %}
+</div>
+
+<!-- 수동 추가 모달 -->
+<div id="addModal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center">
+    <div class="bg-white rounded-xl p-6 w-full max-w-md mx-4 shadow-2xl">
+        <h3 class="text-lg font-semibold text-gray-900 mb-4">키워드 수동 추가</h3>
+        <div class="space-y-4">
+            <div>
+                <label class="label">키워드 *</label>
+                <input type="text" id="manualKeyword" class="input" placeholder="추가할 키워드">
+            </div>
+            <div>
+                <label class="label">우선순위 (0-10)</label>
+                <input type="number" id="manualPriority" class="input" value="0" min="0" max="10">
+            </div>
+            <div>
+                <label class="label">메모</label>
+                <input type="text" id="manualNotes" class="input" placeholder="선택사항">
+            </div>
+        </div>
+        <div class="flex gap-2 mt-5">
+            <button onclick="closeAddModal()" class="btn-secondary flex-1">취소</button>
+            <button onclick="addKeyword()" class="btn-primary flex-1">추가</button>
+        </div>
+    </div>
+</div>
+
+</div><!-- x-data end -->
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function keywordApp() {
+    return {
+        seedKeyword: new URLSearchParams(window.location.search).get('seed') || '',
+        sources: ['google', 'naver'],
+        loading: false,
+        suggestions: [],
+        selectedSuggestions: [],
+        filterStatus: '',
+
+        init() {
+            // URL 파라미터에서 시드 키워드 자동 리서치
+            if (this.seedKeyword) this.research();
+        },
+
+        async research() {
+            if (!this.seedKeyword.trim()) return;
+            this.loading = true;
+            this.suggestions = [];
+            try {
+                const res = await api.post('/api/keywords/research', {
+                    seed_keyword: this.seedKeyword,
+                    sources: this.sources,
+                    max_results: 30
+                });
+                this.suggestions = res;
+                showToast(`${res.length}개 키워드 발견!`, 'success');
+            } catch(e) {
+                showToast('리서치 실패: ' + e.message, 'error');
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async researchAndSave() {
+            if (!this.seedKeyword.trim()) return;
+            this.loading = true;
+            try {
+                const res = await api.post('/api/keywords/research/save', {
+                    seed_keyword: this.seedKeyword,
+                    sources: this.sources,
+                    max_results: 30
+                });
+                showToast(res.message, 'success');
+                setTimeout(() => location.reload(), 1000);
+            } catch(e) {
+                showToast('저장 실패: ' + e.message, 'error');
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        toggleSuggestion(kw) {
+            const idx = this.selectedSuggestions.indexOf(kw.keyword);
+            if (idx >= 0) this.selectedSuggestions.splice(idx, 1);
+            else this.selectedSuggestions.push(kw.keyword);
+        },
+
+        async saveSelected() {
+            for (const kw of this.selectedSuggestions) {
+                try {
+                    await api.post('/api/keywords/', { keyword: kw, source: 'research' });
+                } catch(e) { /* 중복은 무시 */ }
+            }
+            showToast(`${this.selectedSuggestions.length}개 키워드 저장 완료`, 'success');
+            this.selectedSuggestions = [];
+            setTimeout(() => location.reload(), 800);
+        },
+
+        filterKeywords() {
+            const params = this.filterStatus ?
+                `?is_used=${this.filterStatus === 'used'}` : '';
+            // 간단히 페이지 새로고침으로 처리
+        }
+    };
+}
+
+function openAddModal() { document.getElementById('addModal').classList.remove('hidden'); }
+function closeAddModal() { document.getElementById('addModal').classList.add('hidden'); }
+
+async function addKeyword() {
+    const keyword = document.getElementById('manualKeyword').value.trim();
+    if (!keyword) return showToast('키워드를 입력하세요', 'error');
+
+    try {
+        await api.post('/api/keywords/', {
+            keyword,
+            source: 'manual',
+            priority: parseInt(document.getElementById('manualPriority').value) || 0,
+            notes: document.getElementById('manualNotes').value || null,
+        });
+        showToast('키워드 추가 완료', 'success');
+        closeAddModal();
+        setTimeout(() => location.reload(), 800);
+    } catch(e) {
+        showToast(e.message || '추가 실패', 'error');
+    }
+}
+
+async function deleteKeyword(id) {
+    if (!confirm('이 키워드를 삭제하시겠습니까?')) return;
+    try {
+        await api.delete(`/api/keywords/${id}`);
+        showToast('삭제 완료', 'success');
+        setTimeout(() => location.reload(), 500);
+    } catch(e) {
+        showToast('삭제 실패', 'error');
+    }
+}
+</script>
+{% endblock %}

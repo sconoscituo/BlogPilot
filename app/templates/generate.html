@@ -1,0 +1,366 @@
+{% extends "base.html" %}
+
+{% block title %}AI 글 생성{% endblock %}
+{% block page_title %}AI 글 자동 생성{% endblock %}
+{% block page_subtitle %}Gemini AI로 SEO 최적화 블로그 글을 자동으로 생성합니다{% endblock %}
+
+{% block header_actions %}{% endblock %}
+
+{% block content %}
+<div x-data="generateApp()" x-init="init()">
+<div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+
+    <!-- 왼쪽: 생성 설정 폼 -->
+    <div class="xl:col-span-1 space-y-4">
+
+        <!-- 키워드 설정 -->
+        <div class="card">
+            <h2 class="font-semibold text-gray-900 mb-4">🔑 키워드 설정</h2>
+            <div class="space-y-3">
+                <div>
+                    <label class="label">주요 키워드 *</label>
+                    <input type="text" x-model="form.primary_keyword" class="input"
+                           placeholder="예: 다이어트 식단 추천">
+                    {% if keywords %}
+                    <div class="mt-2">
+                        <p class="text-xs text-gray-500 mb-1">저장된 키워드에서 선택:</p>
+                        <div class="flex flex-wrap gap-1 max-h-24 overflow-y-auto">
+                            {% for kw in keywords[:20] %}
+                            <button onclick="document.querySelector('[x-model=\'form.primary_keyword\']').__x.$data.form.primary_keyword='{{ kw.keyword }}'"
+                                    class="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded hover:bg-blue-100 border border-blue-200">
+                                {{ kw.keyword }}
+                            </button>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+                <div>
+                    <label class="label">보조 키워드 (쉼표로 구분)</label>
+                    <input type="text" x-model="form.secondary_keywords" class="input"
+                           placeholder="예: 다이어트, 건강식, 체중감량">
+                </div>
+            </div>
+        </div>
+
+        <!-- 포스트 유형 -->
+        <div class="card">
+            <h2 class="font-semibold text-gray-900 mb-4">📝 포스트 유형</h2>
+            <div class="grid grid-cols-2 gap-2">
+                {% for type in post_types %}
+                <label class="cursor-pointer">
+                    <input type="radio" x-model="form.post_type" value="{{ type.value }}" class="sr-only">
+                    <div :class="form.post_type === '{{ type.value }}' ?
+                        'border-blue-500 bg-blue-50 text-blue-700' :
+                        'border-gray-200 bg-white text-gray-700 hover:border-blue-300'"
+                         class="border-2 rounded-lg p-3 text-center transition cursor-pointer">
+                        <div class="text-xl mb-1">
+                            {% if type.value == 'informational' %}📝
+                            {% elif type.value == 'review' %}⭐
+                            {% elif type.value == 'comparison' %}🔍
+                            {% else %}📋{% endif %}
+                        </div>
+                        <div class="text-xs font-medium">{{ type.label }}</div>
+                    </div>
+                </label>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- 글 설정 -->
+        <div class="card">
+            <h2 class="font-semibold text-gray-900 mb-4">⚙️ 글 설정</h2>
+            <div class="space-y-3">
+                <div>
+                    <label class="label">목표 글자 수: <span class="font-semibold text-blue-600" x-text="form.target_word_count + '자'"></span></label>
+                    <input type="range" x-model="form.target_word_count" min="500" max="5000" step="250" class="w-full accent-blue-600">
+                    <div class="flex justify-between text-xs text-gray-400 mt-1">
+                        <span>500자</span><span>2500자</span><span>5000자</span>
+                    </div>
+                </div>
+                <div>
+                    <label class="label">글 템플릿</label>
+                    <select x-model="form.template_id" class="input">
+                        <option value="">기본 템플릿 사용</option>
+                        {% for tmpl in templates_list %}
+                        <option value="{{ tmpl.id }}">{{ tmpl.name }} ({{ tmpl.template_type }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- 생성 버튼 -->
+        <button @click="generatePost()" :disabled="loading || !form.primary_keyword"
+                class="w-full py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-semibold text-base hover:from-blue-700 hover:to-purple-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg">
+            <span x-show="!loading">🤖 AI 글 생성 시작</span>
+            <span x-show="loading" class="flex items-center gap-2">
+                <span class="spinner border-white border-t-transparent"></span>
+                <span>Gemini가 글을 작성 중...</span>
+            </span>
+        </button>
+
+        <!-- 예상 시간 -->
+        <p class="text-xs text-center text-gray-400">
+            평균 소요 시간: 20-60초 (글자 수에 따라 다름)
+        </p>
+    </div>
+
+    <!-- 오른쪽: 생성 결과 -->
+    <div class="xl:col-span-2">
+
+        <!-- 초기 안내 -->
+        <div x-show="!result && !loading" class="card h-full flex flex-col items-center justify-center py-20 text-center">
+            <div class="text-7xl mb-4">🤖</div>
+            <h3 class="text-xl font-semibold text-gray-800 mb-2">AI 블로그 글 생성기</h3>
+            <p class="text-gray-500 max-w-sm">
+                키워드를 입력하고 포스트 유형을 선택한 후<br>
+                <strong>AI 글 생성 시작</strong> 버튼을 누르세요
+            </p>
+            <div class="mt-6 grid grid-cols-2 gap-3 text-sm w-full max-w-xs">
+                <div class="bg-blue-50 rounded-lg p-3 text-blue-700">
+                    <div class="font-semibold">SEO 최적화</div>
+                    <div class="text-xs mt-1 text-blue-500">키워드 밀도 자동 조절</div>
+                </div>
+                <div class="bg-green-50 rounded-lg p-3 text-green-700">
+                    <div class="font-semibold">HTML 형식</div>
+                    <div class="text-xs mt-1 text-green-500">WordPress 바로 발행</div>
+                </div>
+                <div class="bg-purple-50 rounded-lg p-3 text-purple-700">
+                    <div class="font-semibold">썸네일 자동생성</div>
+                    <div class="text-xs mt-1 text-purple-500">Pillow로 이미지 생성</div>
+                </div>
+                <div class="bg-yellow-50 rounded-lg p-3 text-yellow-700">
+                    <div class="font-semibold">SEO 점수 분석</div>
+                    <div class="text-xs mt-1 text-yellow-500">즉시 개선 제안</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 로딩 상태 -->
+        <div x-show="loading" class="card h-full flex flex-col items-center justify-center py-20">
+            <div class="relative mb-6">
+                <div class="w-20 h-20 border-4 border-blue-200 rounded-full animate-spin border-t-blue-600"></div>
+                <div class="absolute inset-0 flex items-center justify-center text-2xl">🤖</div>
+            </div>
+            <h3 class="text-lg font-semibold text-gray-800 mb-2">AI가 글을 작성 중입니다...</h3>
+            <div class="space-y-1 text-sm text-gray-500 text-center">
+                <p>키워드 분석 → 콘텐츠 구조 설계 → 글 작성 → SEO 최적화</p>
+                <p class="text-xs text-gray-400 mt-2">잠시만 기다려주세요 (20-60초)</p>
+            </div>
+        </div>
+
+        <!-- 생성 결과 -->
+        <div x-show="result" class="space-y-4">
+
+            <!-- SEO 점수 카드 -->
+            <div class="card">
+                <div class="flex items-center justify-between flex-wrap gap-3">
+                    <div>
+                        <h3 class="font-semibold text-gray-900 truncate" x-text="result?.title"></h3>
+                        <p class="text-sm text-gray-500 mt-1" x-text="'키워드: ' + result?.primary_keyword"></p>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <!-- SEO 점수 원형 -->
+                        <div class="text-center">
+                            <div :class="{
+                                'text-green-600': result?.seo_score >= 70,
+                                'text-yellow-600': result?.seo_score >= 50 && result?.seo_score < 70,
+                                'text-red-600': result?.seo_score < 50
+                            }" class="text-3xl font-bold" x-text="result?.seo_score"></div>
+                            <div class="text-xs text-gray-500">SEO 점수</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-3xl font-bold text-blue-600" x-text="result?.word_count"></div>
+                            <div class="text-xs text-gray-500">글자 수</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-3xl font-bold text-purple-600" x-text="result?.keyword_density + '%'"></div>
+                            <div class="text-xs text-gray-500">키워드 밀도</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 액션 버튼 -->
+                <div class="flex flex-wrap gap-2 mt-4 pt-4 border-t border-gray-100">
+                    <a :href="'/posts/' + result?.id" target="_blank" class="btn-secondary text-xs">
+                        👁️ 포스트 보기
+                    </a>
+                    <button @click="publishNow()" class="btn-success text-xs">
+                        🚀 WordPress 발행
+                    </button>
+                    <button @click="schedulePost()" class="btn-primary text-xs">
+                        📅 발행 예약
+                    </button>
+                    <button @click="regenerateImage()" class="btn-secondary text-xs">
+                        🖼️ 썸네일 재생성
+                    </button>
+                </div>
+            </div>
+
+            <!-- 썸네일 미리보기 -->
+            <div x-show="result?.featured_image_path" class="card">
+                <h3 class="font-semibold text-gray-900 mb-3">🖼️ 생성된 썸네일</h3>
+                <img :src="'/generated_images/' + (result?.featured_image_path?.split('/').pop() || '')"
+                     class="w-full rounded-lg border border-gray-200 max-h-48 object-cover"
+                     alt="썸네일 미리보기"
+                     onerror="this.style.display='none'">
+            </div>
+
+            <!-- 메타 설명 -->
+            <div x-show="result?.meta_description" class="card">
+                <h3 class="font-semibold text-gray-900 mb-2">📋 메타 설명</h3>
+                <p class="text-sm text-gray-700 bg-gray-50 p-3 rounded-lg" x-text="result?.meta_description"></p>
+            </div>
+
+            <!-- 콘텐츠 미리보기 탭 -->
+            <div class="card">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="font-semibold text-gray-900">📄 생성된 콘텐츠</h3>
+                    <div class="flex gap-1">
+                        <button @click="previewMode='rendered'"
+                                :class="previewMode==='rendered' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600'"
+                                class="px-3 py-1 rounded text-xs font-medium">미리보기</button>
+                        <button @click="previewMode='html'"
+                                :class="previewMode==='html' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600'"
+                                class="px-3 py-1 rounded text-xs font-medium">HTML</button>
+                    </div>
+                </div>
+                <div x-show="previewMode==='rendered'"
+                     class="prose prose-sm max-w-none max-h-96 overflow-y-auto bg-gray-50 p-4 rounded-lg text-sm leading-relaxed"
+                     x-html="result?.content?.substring(0, 3000) + (result?.content?.length > 3000 ? '...' : '')"></div>
+                <div x-show="previewMode==='html'"
+                     class="max-h-96 overflow-y-auto bg-gray-900 p-4 rounded-lg">
+                    <pre class="text-green-400 text-xs whitespace-pre-wrap break-all"
+                         x-text="result?.content?.substring(0, 2000)"></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 예약 발행 모달 -->
+<div id="scheduleModal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center">
+    <div class="bg-white rounded-xl p-6 w-full max-w-md mx-4 shadow-2xl">
+        <h3 class="text-lg font-semibold text-gray-900 mb-4">📅 발행 예약</h3>
+        <div class="space-y-3">
+            <div>
+                <label class="label">예약 날짜/시간</label>
+                <input type="datetime-local" id="scheduleTime" class="input">
+            </div>
+            <div>
+                <label class="label">스케줄 이름 (선택)</label>
+                <input type="text" id="scheduleName" class="input" placeholder="자동으로 설정됩니다">
+            </div>
+        </div>
+        <div class="flex gap-2 mt-5">
+            <button onclick="document.getElementById('scheduleModal').classList.add('hidden')" class="btn-secondary flex-1">취소</button>
+            <button @click="confirmSchedule()" class="btn-primary flex-1">예약 확정</button>
+        </div>
+    </div>
+</div>
+
+</div><!-- x-data end -->
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function generateApp() {
+    return {
+        form: {
+            primary_keyword: new URLSearchParams(window.location.search).get('keyword') || '',
+            secondary_keywords: '',
+            post_type: 'informational',
+            target_word_count: 2000,
+            template_id: '',
+        },
+        loading: false,
+        result: null,
+        previewMode: 'rendered',
+
+        init() {},
+
+        async generatePost() {
+            if (!this.form.primary_keyword.trim()) {
+                return showToast('주요 키워드를 입력하세요', 'error');
+            }
+            this.loading = true;
+            this.result = null;
+
+            try {
+                const payload = {
+                    primary_keyword: this.form.primary_keyword,
+                    secondary_keywords: this.form.secondary_keywords || null,
+                    post_type: this.form.post_type,
+                    target_word_count: parseInt(this.form.target_word_count),
+                    language: 'ko',
+                };
+                if (this.form.template_id) payload.template_id = parseInt(this.form.template_id);
+
+                const res = await api.post('/api/posts/generate', payload);
+                this.result = res;
+                showToast('글 생성 완료! SEO 점수: ' + res.seo_score + '점', 'success');
+            } catch(e) {
+                showToast('생성 실패: ' + (e.message || '오류가 발생했습니다'), 'error');
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async publishNow() {
+            if (!this.result) return;
+            if (!confirm('WordPress에 즉시 발행하시겠습니까?')) return;
+            try {
+                const res = await api.post('/api/publish/post', {
+                    post_id: this.result.id,
+                    wp_status: 'publish',
+                    upload_image: true,
+                });
+                showToast('발행 완료! ' + (res.wordpress_url || ''), 'success');
+                this.result.status = 'published';
+                this.result.wordpress_url = res.wordpress_url;
+            } catch(e) {
+                showToast('발행 실패: ' + e.message, 'error');
+            }
+        },
+
+        schedulePost() {
+            if (!this.result) return;
+            // 기본값: 내일 오전 9시
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            tomorrow.setHours(9, 0, 0, 0);
+            document.getElementById('scheduleTime').value = tomorrow.toISOString().slice(0, 16);
+            document.getElementById('scheduleName').value = `${this.result.title || this.result.primary_keyword} 발행`;
+            document.getElementById('scheduleModal').classList.remove('hidden');
+        },
+
+        async confirmSchedule() {
+            const timeVal = document.getElementById('scheduleTime').value;
+            if (!timeVal) return showToast('날짜를 선택하세요', 'error');
+
+            try {
+                const res = await api.post(
+                    `/api/schedules/?post_id=${this.result.id}&scheduled_time=${encodeURIComponent(timeVal + ':00')}&name=${encodeURIComponent(document.getElementById('scheduleName').value)}`
+                );
+                showToast('발행 예약 완료', 'success');
+                document.getElementById('scheduleModal').classList.add('hidden');
+            } catch(e) {
+                showToast('예약 실패: ' + e.message, 'error');
+            }
+        },
+
+        async regenerateImage() {
+            if (!this.result) return;
+            try {
+                const res = await api.post(`/api/posts/${this.result.id}/regenerate-image`);
+                this.result.featured_image_path = res.image_path;
+                showToast('썸네일 재생성 완료', 'success');
+            } catch(e) {
+                showToast('썸네일 생성 실패: ' + e.message, 'error');
+            }
+        }
+    };
+}
+</script>
+{% endblock %}

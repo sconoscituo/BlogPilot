@@ -1,0 +1,220 @@
+{% extends "base.html" %}
+
+{% block title %}포스트 관리{% endblock %}
+{% block page_title %}포스트 관리{% endblock %}
+{% block page_subtitle %}생성된 블로그 포스트를 관리하고 발행하세요{% endblock %}
+
+{% block header_actions %}
+<a href="/generate" class="btn-secondary">🤖 새 글 생성</a>
+{% endblock %}
+
+{% block content %}
+
+<!-- 상태 필터 탭 -->
+<div class="flex gap-2 mb-6 flex-wrap">
+    <a href="/posts" class="px-4 py-2 rounded-lg text-sm font-medium {% if not request.query_params.get('status') %}bg-blue-600 text-white{% else %}bg-white text-gray-600 border border-gray-200 hover:bg-gray-50{% endif %}">
+        전체 <span class="ml-1 {% if not request.query_params.get('status') %}bg-blue-500{% else %}bg-gray-200{% endif %} text-xs px-1.5 py-0.5 rounded-full {% if not request.query_params.get('status') %}text-white{% else %}text-gray-600{% endif %}">{{ total }}</span>
+    </a>
+    {% for status_key, label, badge_class in [
+        ('published', '발행됨', 'bg-green-100 text-green-700'),
+        ('scheduled', '예약됨', 'bg-yellow-100 text-yellow-700'),
+        ('generated', 'AI 생성됨', 'bg-blue-100 text-blue-700'),
+        ('draft', '초안', 'bg-gray-100 text-gray-700'),
+        ('failed', '실패', 'bg-red-100 text-red-700'),
+    ] %}
+    <a href="/posts?status={{ status_key }}"
+       class="px-4 py-2 rounded-lg text-sm font-medium border {% if request.query_params.get('status') == status_key %}bg-blue-600 text-white border-blue-600{% else %}bg-white text-gray-600 border-gray-200 hover:bg-gray-50{% endif %}">
+        {{ label }}
+        {% if status_counts.get(status_key, 0) > 0 %}
+        <span class="ml-1 {{ badge_class }} text-xs px-1.5 py-0.5 rounded-full">{{ status_counts.get(status_key, 0) }}</span>
+        {% endif %}
+    </a>
+    {% endfor %}
+</div>
+
+{% if posts %}
+<div class="space-y-3">
+    {% for post in posts %}
+    <div class="card hover:shadow-md transition group">
+        <div class="flex items-start gap-4">
+
+            <!-- 썸네일 -->
+            <div class="w-20 h-16 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
+                {% if post.featured_image_path %}
+                <img src="/generated_images/{{ post.featured_image_path.split('/')[-1] }}"
+                     alt="썸네일" class="w-full h-full object-cover"
+                     onerror="this.parentElement.innerHTML='<div class=\'w-full h-full flex items-center justify-center text-2xl\'>📝</div>'">
+                {% else %}
+                <div class="w-full h-full flex items-center justify-center text-2xl">
+                    {% if post.post_type == 'review' %}⭐
+                    {% elif post.post_type == 'comparison' %}🔍
+                    {% elif post.post_type == 'listicle' %}📋
+                    {% else %}📝{% endif %}
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- 내용 -->
+            <div class="flex-1 min-w-0">
+                <div class="flex items-start justify-between gap-2">
+                    <div class="min-w-0">
+                        <h3 class="font-semibold text-gray-900 truncate group-hover:text-blue-600 transition">
+                            {{ post.title or post.primary_keyword }}
+                        </h3>
+                        <p class="text-sm text-gray-500 mt-0.5">
+                            키워드: <span class="font-medium text-blue-600">{{ post.primary_keyword }}</span>
+                            {% if post.secondary_keywords %}
+                            · {{ post.secondary_keywords[:50] }}
+                            {% endif %}
+                        </p>
+                    </div>
+
+                    <!-- 상태 뱃지 -->
+                    {% if post.status == 'published' %}
+                    <span class="badge badge-green flex-shrink-0">✓ 발행됨</span>
+                    {% elif post.status == 'scheduled' %}
+                    <span class="badge badge-yellow flex-shrink-0">📅 예약됨</span>
+                    {% elif post.status == 'generated' %}
+                    <span class="badge badge-blue flex-shrink-0">🤖 생성됨</span>
+                    {% elif post.status == 'draft' %}
+                    <span class="badge badge-gray flex-shrink-0">📋 초안</span>
+                    {% elif post.status == 'failed' %}
+                    <span class="badge badge-red flex-shrink-0">✗ 실패</span>
+                    {% endif %}
+                </div>
+
+                <!-- 지표 -->
+                <div class="flex items-center gap-4 mt-2 flex-wrap">
+                    {% if post.seo_score %}
+                    <div class="flex items-center gap-1 text-xs">
+                        <span class="text-gray-400">SEO</span>
+                        <span class="font-bold {% if post.seo_score >= 70 %}text-green-600{% elif post.seo_score >= 50 %}text-yellow-600{% else %}text-red-600{% endif %}">
+                            {{ post.seo_score }}점
+                        </span>
+                        <div class="w-16 bg-gray-200 rounded-full h-1">
+                            <div class="h-1 rounded-full {% if post.seo_score >= 70 %}bg-green-500{% elif post.seo_score >= 50 %}bg-yellow-500{% else %}bg-red-500{% endif %}"
+                                 style="width: {{ post.seo_score }}%"></div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    {% if post.word_count %}
+                    <span class="text-xs text-gray-500">📝 {{ post.word_count }}자</span>
+                    {% endif %}
+                    <span class="text-xs text-gray-400">
+                        {% if post.post_type == 'informational' %}정보성
+                        {% elif post.post_type == 'review' %}리뷰
+                        {% elif post.post_type == 'comparison' %}비교
+                        {% elif post.post_type == 'listicle' %}리스트형{% endif %}
+                    </span>
+                    {% if post.published_at %}
+                    <span class="text-xs text-gray-400">발행: {{ post.published_at.strftime('%Y-%m-%d %H:%M') }}</span>
+                    {% elif post.scheduled_at %}
+                    <span class="text-xs text-yellow-600">예약: {{ post.scheduled_at.strftime('%Y-%m-%d %H:%M') }}</span>
+                    {% else %}
+                    <span class="text-xs text-gray-400">생성: {{ post.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
+                    {% endif %}
+                </div>
+
+                <!-- 오류 메시지 -->
+                {% if post.error_message %}
+                <p class="text-xs text-red-600 mt-1 bg-red-50 px-2 py-1 rounded">
+                    ⚠️ {{ post.error_message[:100] }}
+                </p>
+                {% endif %}
+            </div>
+
+            <!-- 액션 버튼 -->
+            <div class="flex flex-col gap-1.5 flex-shrink-0">
+                {% if post.wordpress_url %}
+                <a href="{{ post.wordpress_url }}" target="_blank" class="btn-secondary text-xs py-1.5">
+                    🔗 보기
+                </a>
+                {% endif %}
+
+                {% if post.status in ('generated', 'draft') and is_wordpress_configured %}
+                <button onclick="publishPost({{ post.id }})" class="btn-success text-xs py-1.5">
+                    🚀 발행
+                </button>
+                {% endif %}
+
+                {% if post.status == 'failed' %}
+                <button onclick="retryPublish({{ post.id }})" class="btn-secondary text-xs py-1.5">
+                    🔄 재시도
+                </button>
+                {% endif %}
+
+                <button onclick="deletePost({{ post.id }})" class="btn-danger text-xs py-1.5">
+                    🗑️ 삭제
+                </button>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{% else %}
+<div class="card text-center py-16">
+    <div class="text-6xl mb-4">📭</div>
+    <h3 class="text-lg font-semibold text-gray-700 mb-2">포스트가 없습니다</h3>
+    <p class="text-gray-500 mb-6">AI 글 생성 기능으로 첫 번째 블로그 포스트를 만들어보세요!</p>
+    <a href="/generate" class="btn-primary">🤖 AI 글 생성 시작</a>
+</div>
+{% endif %}
+
+{% if not is_wordpress_configured %}
+<div class="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
+    <div class="flex items-start gap-3">
+        <span class="text-2xl">⚠️</span>
+        <div>
+            <p class="font-medium text-yellow-800">WordPress 연결이 필요합니다</p>
+            <p class="text-sm text-yellow-700 mt-1">
+                .env 파일에 WORDPRESS_URL, WORDPRESS_USERNAME, WORDPRESS_APP_PASSWORD를 설정하면
+                직접 발행 기능을 사용할 수 있습니다.
+            </p>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+async function publishPost(postId) {
+    if (!confirm('이 포스트를 WordPress에 발행하시겠습니까?')) return;
+    try {
+        showToast('발행 중...', 'info');
+        const res = await api.post('/api/publish/post', {
+            post_id: postId,
+            wp_status: 'publish',
+            upload_image: true,
+        });
+        showToast('발행 완료!', 'success');
+        setTimeout(() => location.reload(), 1000);
+    } catch(e) {
+        showToast('발행 실패: ' + e.message, 'error');
+    }
+}
+
+async function retryPublish(postId) {
+    try {
+        await api.post(`/api/publish/retry/${postId}`);
+        showToast('재시도 준비 완료', 'success');
+        setTimeout(() => location.reload(), 800);
+    } catch(e) {
+        showToast('실패: ' + e.message, 'error');
+    }
+}
+
+async function deletePost(postId) {
+    if (!confirm('이 포스트를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) return;
+    try {
+        await api.delete(`/api/posts/${postId}`);
+        showToast('삭제 완료', 'success');
+        setTimeout(() => location.reload(), 500);
+    } catch(e) {
+        showToast('삭제 실패', 'error');
+    }
+}
+</script>
+{% endblock %}

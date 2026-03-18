@@ -1,0 +1,282 @@
+{% extends "base.html" %}
+
+{% block title %}글 템플릿 관리{% endblock %}
+{% block page_title %}글 템플릿 관리{% endblock %}
+{% block page_subtitle %}AI 글 생성에 사용할 프롬프트 템플릿을 관리하세요{% endblock %}
+
+{% block header_actions %}
+<button onclick="openCreateModal()" class="btn-secondary">➕ 새 템플릿</button>
+<button onclick="seedDefaults()" class="btn-secondary">🔄 기본 템플릿 복원</button>
+{% endblock %}
+
+{% block content %}
+<div x-data="templateApp()">
+
+<!-- 유형별 필터 -->
+<div class="flex gap-2 mb-6 flex-wrap">
+    <button @click="filterType=''" :class="filterType==='' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 border border-gray-200'"
+            class="px-4 py-2 rounded-lg text-sm font-medium">전체 ({{ total }})</button>
+    {% for t in template_types %}
+    <button @click="filterType='{{ t.value }}'"
+            :class="filterType==='{{ t.value }}' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'"
+            class="px-4 py-2 rounded-lg text-sm font-medium">
+        {{ t.icon }} {{ t.label }}
+    </button>
+    {% endfor %}
+</div>
+
+{% if templates %}
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    {% for tmpl in templates %}
+    <div class="card hover:shadow-md transition"
+         x-show="filterType === '' || filterType === '{{ tmpl.template_type }}'">
+        <div class="flex items-start justify-between gap-3 mb-3">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl flex items-center justify-center text-xl
+                    {% if tmpl.template_type == 'informational' %}bg-blue-100
+                    {% elif tmpl.template_type == 'review' %}bg-yellow-100
+                    {% elif tmpl.template_type == 'comparison' %}bg-purple-100
+                    {% else %}bg-green-100{% endif %}">
+                    {% if tmpl.template_type == 'informational' %}📝
+                    {% elif tmpl.template_type == 'review' %}⭐
+                    {% elif tmpl.template_type == 'comparison' %}🔍
+                    {% else %}📋{% endif %}
+                </div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <h3 class="font-semibold text-gray-900">{{ tmpl.name }}</h3>
+                        {% if tmpl.is_default %}
+                        <span class="badge badge-blue text-xs">기본</span>
+                        {% endif %}
+                        {% if not tmpl.is_active %}
+                        <span class="badge badge-gray text-xs">비활성</span>
+                        {% endif %}
+                    </div>
+                    <p class="text-xs text-gray-500 mt-0.5">
+                        {% if tmpl.template_type == 'informational' %}정보성
+                        {% elif tmpl.template_type == 'review' %}리뷰
+                        {% elif tmpl.template_type == 'comparison' %}비교
+                        {% else %}리스트형{% endif %}
+                        · 사용 {{ tmpl.usage_count }}회
+                    </p>
+                </div>
+            </div>
+            <div class="flex gap-1 flex-shrink-0">
+                <button onclick="viewTemplate({{ tmpl.id }})" class="btn-secondary text-xs py-1">보기</button>
+                <button onclick="deleteTemplate({{ tmpl.id }})" class="btn-danger text-xs py-1">삭제</button>
+            </div>
+        </div>
+
+        {% if tmpl.description %}
+        <p class="text-sm text-gray-600 mb-3">{{ tmpl.description }}</p>
+        {% endif %}
+
+        <div class="grid grid-cols-3 gap-2 text-center bg-gray-50 rounded-lg p-3 text-xs">
+            <div>
+                <p class="text-gray-400">목표 분량</p>
+                <p class="font-semibold text-gray-700">{{ tmpl.min_word_count }}-{{ tmpl.max_word_count }}자</p>
+            </div>
+            <div>
+                <p class="text-gray-400">키워드 밀도</p>
+                <p class="font-semibold text-gray-700">{{ tmpl.keyword_density_target }}%</p>
+            </div>
+            <div>
+                <p class="text-gray-400">옵션</p>
+                <p class="font-semibold text-gray-700">
+                    {% if tmpl.include_faq %}FAQ {% endif %}{% if tmpl.include_toc %}목차{% endif %}
+                </p>
+            </div>
+        </div>
+
+        <!-- 프롬프트 미리보기 -->
+        <div class="mt-3 bg-gray-900 rounded-lg p-3 max-h-20 overflow-hidden relative">
+            <pre class="text-green-400 text-xs whitespace-pre-wrap">{{ tmpl.system_prompt[:200] }}...</pre>
+            <div class="absolute bottom-0 left-0 right-0 h-6 bg-gradient-to-t from-gray-900"></div>
+        </div>
+
+        <div class="mt-3 flex gap-2">
+            <a href="/generate?template={{ tmpl.id }}" class="btn-primary text-xs flex-1 justify-center">
+                🤖 이 템플릿으로 글 생성
+            </a>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="card text-center py-16">
+    <div class="text-6xl mb-4">📋</div>
+    <h3 class="text-lg font-semibold text-gray-700 mb-2">템플릿이 없습니다</h3>
+    <p class="text-gray-500 mb-6">기본 템플릿을 복원하거나 새 템플릿을 생성하세요</p>
+    <button onclick="seedDefaults()" class="btn-primary">🔄 기본 템플릿 복원</button>
+</div>
+{% endif %}
+
+<!-- 템플릿 상세 보기 모달 -->
+<div id="viewModal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl">
+        <div class="sticky top-0 bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between">
+            <h3 class="text-lg font-semibold text-gray-900" id="modalTitle">템플릿 상세</h3>
+            <button onclick="document.getElementById('viewModal').classList.add('hidden')"
+                    class="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+        </div>
+        <div class="p-6 space-y-4" id="modalContent">
+            <!-- 동적 콘텐츠 -->
+        </div>
+    </div>
+</div>
+
+<!-- 새 템플릿 생성 모달 -->
+<div id="createModal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl">
+        <div class="sticky top-0 bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between">
+            <h3 class="text-lg font-semibold text-gray-900">새 템플릿 생성</h3>
+            <button onclick="document.getElementById('createModal').classList.add('hidden')"
+                    class="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+        </div>
+        <div class="p-6 space-y-4">
+            <div>
+                <label class="label">템플릿 이름 *</label>
+                <input type="text" id="newName" class="input" placeholder="예: 맞춤형 리뷰 템플릿">
+            </div>
+            <div>
+                <label class="label">유형 *</label>
+                <select id="newType" class="input">
+                    <option value="informational">정보성</option>
+                    <option value="review">리뷰</option>
+                    <option value="comparison">비교</option>
+                    <option value="listicle">리스트형</option>
+                </select>
+            </div>
+            <div>
+                <label class="label">설명</label>
+                <input type="text" id="newDescription" class="input" placeholder="이 템플릿에 대한 간단한 설명">
+            </div>
+            <div>
+                <label class="label">시스템 프롬프트 *</label>
+                <textarea id="newSystemPrompt" class="input h-32 resize-none font-mono text-xs"
+                          placeholder="AI에게 역할을 지시하는 시스템 프롬프트"></textarea>
+            </div>
+            <div>
+                <label class="label">사용자 프롬프트 템플릿 *</label>
+                <textarea id="newUserPrompt" class="input h-48 resize-none font-mono text-xs"
+                          placeholder="사용 가능한 변수: {primary_keyword}, {secondary_keywords}, {target_word_count}"></textarea>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="label">최소 글자 수</label>
+                    <input type="number" id="newMinWords" class="input" value="1500">
+                </div>
+                <div>
+                    <label class="label">최대 글자 수</label>
+                    <input type="number" id="newMaxWords" class="input" value="3000">
+                </div>
+            </div>
+            <div class="flex gap-4">
+                <label class="flex items-center gap-2 text-sm">
+                    <input type="checkbox" id="newFaq" checked class="rounded text-blue-600"> FAQ 포함
+                </label>
+                <label class="flex items-center gap-2 text-sm">
+                    <input type="checkbox" id="newToc" checked class="rounded text-blue-600"> 목차 포함
+                </label>
+                <label class="flex items-center gap-2 text-sm">
+                    <input type="checkbox" id="newDefault" class="rounded text-blue-600"> 기본 템플릿
+                </label>
+            </div>
+            <div class="flex gap-2 pt-2">
+                <button onclick="document.getElementById('createModal').classList.add('hidden')"
+                        class="btn-secondary flex-1">취소</button>
+                <button onclick="createTemplate()" class="btn-primary flex-1">생성</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+</div><!-- x-data end -->
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function templateApp() {
+    return { filterType: '' };
+}
+
+function openCreateModal() {
+    document.getElementById('createModal').classList.remove('hidden');
+}
+
+async function viewTemplate(id) {
+    try {
+        const tmpl = await api.get(`/api/templates/${id}`);
+        document.getElementById('modalTitle').textContent = tmpl.name;
+        document.getElementById('modalContent').innerHTML = `
+            <div class="space-y-3">
+                <div class="grid grid-cols-2 gap-3 text-sm">
+                    <div><span class="text-gray-500">유형:</span> <strong>${tmpl.template_type}</strong></div>
+                    <div><span class="text-gray-500">사용 횟수:</span> <strong>${tmpl.usage_count}회</strong></div>
+                    <div><span class="text-gray-500">목표 분량:</span> <strong>${tmpl.min_word_count}-${tmpl.max_word_count}자</strong></div>
+                    <div><span class="text-gray-500">키워드 밀도:</span> <strong>${tmpl.keyword_density_target}%</strong></div>
+                </div>
+                <div>
+                    <p class="text-sm font-medium text-gray-700 mb-1">시스템 프롬프트</p>
+                    <pre class="bg-gray-900 text-green-400 p-3 rounded-lg text-xs whitespace-pre-wrap max-h-48 overflow-y-auto">${tmpl.system_prompt}</pre>
+                </div>
+                <div>
+                    <p class="text-sm font-medium text-gray-700 mb-1">사용자 프롬프트 템플릿</p>
+                    <pre class="bg-gray-50 text-gray-700 p-3 rounded-lg text-xs whitespace-pre-wrap max-h-64 overflow-y-auto border">${tmpl.user_prompt_template}</pre>
+                </div>
+            </div>
+        `;
+        document.getElementById('viewModal').classList.remove('hidden');
+    } catch(e) {
+        showToast('템플릿 로드 실패', 'error');
+    }
+}
+
+async function createTemplate() {
+    const payload = {
+        name: document.getElementById('newName').value.trim(),
+        template_type: document.getElementById('newType').value,
+        description: document.getElementById('newDescription').value.trim() || null,
+        system_prompt: document.getElementById('newSystemPrompt').value.trim(),
+        user_prompt_template: document.getElementById('newUserPrompt').value.trim(),
+        min_word_count: parseInt(document.getElementById('newMinWords').value),
+        max_word_count: parseInt(document.getElementById('newMaxWords').value),
+        include_faq: document.getElementById('newFaq').checked,
+        include_toc: document.getElementById('newToc').checked,
+        is_default: document.getElementById('newDefault').checked,
+    };
+    if (!payload.name || !payload.system_prompt || !payload.user_prompt_template) {
+        return showToast('필수 항목을 입력하세요', 'error');
+    }
+    try {
+        await api.post('/api/templates/', payload);
+        showToast('템플릿 생성 완료', 'success');
+        document.getElementById('createModal').classList.add('hidden');
+        setTimeout(() => location.reload(), 800);
+    } catch(e) {
+        showToast('생성 실패: ' + e.message, 'error');
+    }
+}
+
+async function deleteTemplate(id) {
+    if (!confirm('이 템플릿을 삭제하시겠습니까?')) return;
+    try {
+        await api.delete(`/api/templates/${id}`);
+        showToast('삭제 완료', 'success');
+        setTimeout(() => location.reload(), 500);
+    } catch(e) {
+        showToast('삭제 실패', 'error');
+    }
+}
+
+async function seedDefaults() {
+    try {
+        const res = await api.post('/api/templates/seed-defaults');
+        showToast(res.message, 'success');
+        setTimeout(() => location.reload(), 800);
+    } catch(e) {
+        showToast('복원 실패: ' + e.message, 'error');
+    }
+}
+</script>
+{% endblock %}
