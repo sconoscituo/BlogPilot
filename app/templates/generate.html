@@ -90,6 +90,27 @@
             </div>
         </div>
 
+        <!-- 추가 옵션 -->
+        <div class="card">
+            <h2 class="font-semibold text-gray-900 mb-3">🛠️ 추가 옵션</h2>
+            <div class="space-y-2">
+                <label class="flex items-center gap-3 cursor-pointer">
+                    <input type="checkbox" x-model="form.insert_internal_links" class="w-4 h-4 accent-blue-600">
+                    <div>
+                        <p class="text-sm font-medium text-gray-800">🔗 내부링크 자동 삽입</p>
+                        <p class="text-xs text-gray-500">기존 발행 글과 키워드 매칭으로 2-3개 내부링크 삽입</p>
+                    </div>
+                </label>
+                <label class="flex items-center gap-3 cursor-pointer">
+                    <input type="checkbox" x-model="form.insert_stock_images" class="w-4 h-4 accent-blue-600">
+                    <div>
+                        <p class="text-sm font-medium text-gray-800">🖼️ 이미지 자동 삽입</p>
+                        <p class="text-xs text-gray-500">Unsplash에서 H2 섹션마다 관련 이미지 자동 삽입</p>
+                    </div>
+                </label>
+            </div>
+        </div>
+
         <!-- 생성 버튼 -->
         <button @click="generatePost()" :disabled="loading || !form.primary_keyword"
                 class="w-full py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-semibold text-base hover:from-blue-700 hover:to-purple-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg">
@@ -273,6 +294,8 @@ function generateApp() {
             post_type: 'informational',
             target_word_count: 2000,
             template_id: '',
+            insert_internal_links: true,
+            insert_stock_images: false,
         },
         loading: false,
         result: null,
@@ -294,6 +317,8 @@ function generateApp() {
                     post_type: this.form.post_type,
                     target_word_count: parseInt(this.form.target_word_count),
                     language: 'ko',
+                    insert_internal_links: this.form.insert_internal_links,
+                    insert_stock_images: this.form.insert_stock_images,
                 };
                 if (this.form.template_id) payload.template_id = parseInt(this.form.template_id);
 

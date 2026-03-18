@@ -1,0 +1,332 @@
+{% extends "base.html" %}
+
+{% block title %}분석 대시보드{% endblock %}
+{% block page_title %}분석 대시보드{% endblock %}
+{% block page_subtitle %}검색 성과와 애드센스 수익을 한눈에 확인하세요{% endblock %}
+
+{% block extra_head %}
+<style>
+    .stat-card { @apply bg-white rounded-xl shadow-sm border border-gray-100 p-5; }
+    .trend-up   { color: #16a34a; }
+    .trend-down { color: #dc2626; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div x-data="analyticsApp()" x-init="init()">
+
+    <!-- 날짜 범위 선택 -->
+    <div class="card mb-6 flex flex-wrap items-center gap-4">
+        <div class="flex items-center gap-2">
+            <label class="label mb-0 whitespace-nowrap">기간 선택:</label>
+            <select x-model="dateRange" @change="loadAll()" class="input w-40">
+                <option value="7">최근 7일</option>
+                <option value="28" selected>최근 28일</option>
+                <option value="90">최근 90일</option>
+            </select>
+        </div>
+        {% if not search_console_configured or not adsense_configured %}
+        <div class="flex items-center gap-2 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+            <span>⚠️</span>
+            <span>
+                API 미설정 항목이 있어 <strong>데모 데이터</strong>로 표시됩니다.
+                {% if not search_console_configured %}<span class="badge badge-yellow ml-1">서치 콘솔 미설정</span>{% endif %}
+                {% if not adsense_configured %}<span class="badge badge-yellow ml-1">애드센스 미설정</span>{% endif %}
+            </span>
+        </div>
+        {% endif %}
+        <button @click="loadAll()" class="btn-secondary ml-auto">
+            <span>🔄</span> 새로고침
+        </button>
+    </div>
+
+    <!-- 로딩 -->
+    <div x-show="loading" class="flex items-center justify-center py-20">
+        <div class="text-center">
+            <div class="spinner w-10 h-10 mx-auto mb-3"></div>
+            <p class="text-gray-500 text-sm">데이터를 불러오는 중...</p>
+        </div>
+    </div>
+
+    <div x-show="!loading">
+
+        <!-- ===== 애드센스 수익 섹션 ===== -->
+        <h2 class="text-lg font-bold text-gray-900 mb-3">💰 애드센스 수익</h2>
+
+        <!-- 합계 카드 -->
+        <div class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+            <div class="stat-card text-center">
+                <p class="text-xs text-gray-500 mb-1">총 수익 (USD)</p>
+                <p class="text-2xl font-bold text-green-600" x-text="'$' + (adsense.totals?.earnings ?? 0)"></p>
+            </div>
+            <div class="stat-card text-center">
+                <p class="text-xs text-gray-500 mb-1">총 페이지뷰</p>
+                <p class="text-2xl font-bold text-blue-600" x-text="(adsense.totals?.pageviews ?? 0).toLocaleString()"></p>
+            </div>
+            <div class="stat-card text-center">
+                <p class="text-xs text-gray-500 mb-1">총 클릭수</p>
+                <p class="text-2xl font-bold text-purple-600" x-text="(adsense.totals?.clicks ?? 0).toLocaleString()"></p>
+            </div>
+            <div class="stat-card text-center">
+                <p class="text-xs text-gray-500 mb-1">평균 RPM</p>
+                <p class="text-2xl font-bold text-orange-600" x-text="'$' + (adsense.totals?.avg_rpm ?? 0)"></p>
+            </div>
+            <div class="stat-card text-center">
+                <p class="text-xs text-gray-500 mb-1">평균 CPC</p>
+                <p class="text-2xl font-bold text-teal-600" x-text="'$' + (adsense.totals?.avg_cpc ?? 0)"></p>
+            </div>
+        </div>
+
+        <!-- 일별 수익 차트 -->
+        <div class="card mb-6">
+            <h3 class="font-semibold text-gray-900 mb-4">📊 일별 수익 추이</h3>
+            <canvas id="revenueChart" height="90"></canvas>
+        </div>
+
+        <!-- 월간 합계 테이블 -->
+        <div class="card mb-6" x-show="adsense.monthly?.length > 0">
+            <h3 class="font-semibold text-gray-900 mb-3">🗓️ 월간 수익 합계</h3>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="border-b border-gray-100">
+                            <th class="text-left py-2 px-3 text-gray-500 font-medium">월</th>
+                            <th class="text-right py-2 px-3 text-gray-500 font-medium">수익 (USD)</th>
+                            <th class="text-right py-2 px-3 text-gray-500 font-medium">페이지뷰</th>
+                            <th class="text-right py-2 px-3 text-gray-500 font-medium">클릭수</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="m in adsense.monthly" :key="m.month">
+                            <tr class="border-b border-gray-50 hover:bg-gray-50">
+                                <td class="py-2 px-3 font-medium" x-text="m.month"></td>
+                                <td class="py-2 px-3 text-right text-green-700 font-semibold" x-text="'$' + m.earnings"></td>
+                                <td class="py-2 px-3 text-right text-gray-600" x-text="m.pageviews.toLocaleString()"></td>
+                                <td class="py-2 px-3 text-right text-gray-600" x-text="m.clicks.toLocaleString()"></td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 페이지별 수익 (데모 데이터용) -->
+        <div class="card mb-8" x-show="adsense.page_revenue?.length > 0">
+            <h3 class="font-semibold text-gray-900 mb-3">📄 페이지별 수익</h3>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="border-b border-gray-100">
+                            <th class="text-left py-2 px-3 text-gray-500 font-medium">페이지</th>
+                            <th class="text-right py-2 px-3 text-gray-500 font-medium">수익 (USD)</th>
+                            <th class="text-right py-2 px-3 text-gray-500 font-medium">페이지뷰</th>
+                            <th class="text-right py-2 px-3 text-gray-500 font-medium">RPM</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="p in adsense.page_revenue" :key="p.page">
+                            <tr class="border-b border-gray-50 hover:bg-gray-50">
+                                <td class="py-2 px-3 text-blue-600 font-medium" x-text="p.page"></td>
+                                <td class="py-2 px-3 text-right text-green-700 font-semibold" x-text="'$' + p.earnings"></td>
+                                <td class="py-2 px-3 text-right text-gray-600" x-text="p.pageviews.toLocaleString()"></td>
+                                <td class="py-2 px-3 text-right text-gray-600" x-text="'$' + p.rpm"></td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ===== 서치 콘솔 섹션 ===== -->
+        <h2 class="text-lg font-bold text-gray-900 mb-3">🔍 검색 성과</h2>
+
+        <!-- 추이 차트 -->
+        <div class="card mb-6">
+            <h3 class="font-semibold text-gray-900 mb-4">📈 클릭수 / 노출수 추이</h3>
+            <canvas id="searchTrendChart" height="90"></canvas>
+        </div>
+
+        <!-- 키워드 테이블 -->
+        <div class="card">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="font-semibold text-gray-900">🔑 키워드별 검색 성과</h3>
+                <span class="badge badge-blue" x-text="(searchData.keywords?.length ?? 0) + '개 키워드'"></span>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="border-b border-gray-100">
+                            <th class="text-left py-2 px-3 text-gray-500 font-medium">#</th>
+                            <th class="text-left py-2 px-3 text-gray-500 font-medium">키워드</th>
+                            <th class="text-right py-2 px-3 text-gray-500 font-medium">클릭수</th>
+                            <th class="text-right py-2 px-3 text-gray-500 font-medium">노출수</th>
+                            <th class="text-right py-2 px-3 text-gray-500 font-medium">CTR</th>
+                            <th class="text-right py-2 px-3 text-gray-500 font-medium">평균 순위</th>
+                            <th class="text-left py-2 px-3 text-gray-500 font-medium">액션</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="(kw, idx) in searchData.keywords" :key="kw.keyword">
+                            <tr class="border-b border-gray-50 hover:bg-gray-50">
+                                <td class="py-2 px-3 text-gray-400 text-xs" x-text="idx + 1"></td>
+                                <td class="py-2 px-3 font-medium text-gray-900" x-text="kw.keyword"></td>
+                                <td class="py-2 px-3 text-right font-semibold text-blue-700" x-text="kw.clicks.toLocaleString()"></td>
+                                <td class="py-2 px-3 text-right text-gray-600" x-text="kw.impressions.toLocaleString()"></td>
+                                <td class="py-2 px-3 text-right" :class="kw.ctr >= 5 ? 'text-green-600 font-semibold' : 'text-gray-600'" x-text="kw.ctr + '%'"></td>
+                                <td class="py-2 px-3 text-right" :class="kw.position <= 5 ? 'text-green-600 font-semibold' : kw.position <= 10 ? 'text-yellow-600' : 'text-red-500'" x-text="kw.position"></td>
+                                <td class="py-2 px-3">
+                                    <a :href="'/generate?keyword=' + encodeURIComponent(kw.keyword)"
+                                       class="text-xs text-blue-600 hover:underline whitespace-nowrap">글 생성 →</a>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+            <p x-show="searchData.is_demo" class="text-xs text-amber-600 mt-3">
+                * 데모 데이터입니다. 실제 데이터를 보려면 환경변수에 API 자격증명을 설정하세요.
+            </p>
+        </div>
+
+    </div><!-- !loading -->
+</div><!-- x-data -->
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function analyticsApp() {
+    return {
+        dateRange: '28',
+        loading: false,
+        searchData: { keywords: [], trend: [], is_demo: true },
+        adsense: { daily: [], monthly: [], totals: {}, page_revenue: [], is_demo: true },
+        revenueChart: null,
+        searchTrendChart: null,
+
+        async init() {
+            await this.loadAll();
+        },
+
+        async loadAll() {
+            this.loading = true;
+            const days = parseInt(this.dateRange);
+            const endDate = new Date();
+            endDate.setDate(endDate.getDate() - 3);
+            const startDate = new Date(endDate);
+            startDate.setDate(startDate.getDate() - days);
+
+            const fmt = d => d.toISOString().split('T')[0];
+
+            try {
+                const [sc, ads] = await Promise.all([
+                    fetch(`/api/analytics/search-performance?start_date=${fmt(startDate)}&end_date=${fmt(endDate)}&row_limit=50`).then(r => r.json()),
+                    fetch(`/api/analytics/adsense-revenue?start_date=${fmt(startDate)}&end_date=${fmt(endDate)}`).then(r => r.json()),
+                ]);
+                this.searchData = sc;
+                this.adsense = ads;
+            } catch(e) {
+                console.error('데이터 로드 실패:', e);
+                showToast('데이터 로드에 실패했습니다.', 'error');
+            } finally {
+                this.loading = false;
+                await this.$nextTick();
+                this.renderCharts();
+            }
+        },
+
+        renderCharts() {
+            this.renderRevenueChart();
+            this.renderSearchTrendChart();
+        },
+
+        renderRevenueChart() {
+            const ctx = document.getElementById('revenueChart');
+            if (!ctx) return;
+            if (this.revenueChart) this.revenueChart.destroy();
+
+            const daily = this.adsense.daily || [];
+            this.revenueChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: daily.map(d => d.date.slice(5)),
+                    datasets: [
+                        {
+                            label: '수익 (USD)',
+                            data: daily.map(d => d.earnings),
+                            backgroundColor: 'rgba(22,163,74,0.7)',
+                            borderRadius: 4,
+                            yAxisID: 'y',
+                        },
+                        {
+                            label: '페이지뷰',
+                            data: daily.map(d => d.pageviews),
+                            type: 'line',
+                            borderColor: '#3b82f6',
+                            backgroundColor: 'rgba(59,130,246,0.1)',
+                            fill: true,
+                            tension: 0.3,
+                            pointRadius: 2,
+                            yAxisID: 'y1',
+                        },
+                    ],
+                },
+                options: {
+                    responsive: true,
+                    interaction: { mode: 'index', intersect: false },
+                    scales: {
+                        y:  { position: 'left',  title: { display: true, text: 'USD' }, beginAtZero: true },
+                        y1: { position: 'right', title: { display: true, text: '페이지뷰' }, beginAtZero: true, grid: { drawOnChartArea: false } },
+                    },
+                    plugins: { legend: { position: 'top' } },
+                },
+            });
+        },
+
+        renderSearchTrendChart() {
+            const ctx = document.getElementById('searchTrendChart');
+            if (!ctx) return;
+            if (this.searchTrendChart) this.searchTrendChart.destroy();
+
+            const trend = this.searchData.trend || [];
+            this.searchTrendChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: trend.map(d => d.date.slice(5)),
+                    datasets: [
+                        {
+                            label: '클릭수',
+                            data: trend.map(d => d.clicks),
+                            borderColor: '#2563eb',
+                            backgroundColor: 'rgba(37,99,235,0.1)',
+                            fill: true,
+                            tension: 0.3,
+                            pointRadius: 2,
+                            yAxisID: 'y',
+                        },
+                        {
+                            label: '노출수',
+                            data: trend.map(d => d.impressions),
+                            borderColor: '#7c3aed',
+                            backgroundColor: 'rgba(124,58,237,0.05)',
+                            fill: true,
+                            tension: 0.3,
+                            pointRadius: 2,
+                            yAxisID: 'y1',
+                        },
+                    ],
+                },
+                options: {
+                    responsive: true,
+                    interaction: { mode: 'index', intersect: false },
+                    scales: {
+                        y:  { position: 'left',  title: { display: true, text: '클릭수' }, beginAtZero: true },
+                        y1: { position: 'right', title: { display: true, text: '노출수' }, beginAtZero: true, grid: { drawOnChartArea: false } },
+                    },
+                    plugins: { legend: { position: 'top' } },
+                },
+            });
+        },
+    };
+}
+</script>
+{% endblock %}

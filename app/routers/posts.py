@@ -73,6 +73,9 @@ async def generate_post(
             target_word_count=request.target_word_count,
             custom_system_prompt=custom_system_prompt,
             custom_user_prompt=custom_user_prompt,
+            insert_internal_links=request.insert_internal_links,
+            insert_stock_images=request.insert_stock_images,
+            db=db,
         )
 
         # 썸네일 이미지 생성

@@ -45,6 +45,16 @@ class Settings:
     MAX_CONTENT_TOKENS: int = 8192
     DEFAULT_LANGUAGE: str = "ko"  # 한국어
 
+    # 구글 서치 콘솔 설정
+    GOOGLE_SEARCH_CONSOLE_CREDENTIALS: str = os.getenv("GOOGLE_SEARCH_CONSOLE_CREDENTIALS", "")
+    SEARCH_CONSOLE_SITE_URL: str = os.getenv("SEARCH_CONSOLE_SITE_URL", "")
+
+    # 구글 애드센스 설정
+    ADSENSE_ACCOUNT_ID: str = os.getenv("ADSENSE_ACCOUNT_ID", "")
+
+    # Unsplash 이미지 설정
+    UNSPLASH_ACCESS_KEY: str = os.getenv("UNSPLASH_ACCESS_KEY", "")
+
     @property
     def wordpress_api_url(self) -> str:
         """WordPress REST API 기본 URL"""

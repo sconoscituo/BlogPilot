@@ -149,6 +149,10 @@ class ContentGenerator:
         target_word_count: int = 2000,
         custom_system_prompt: Optional[str] = None,
         custom_user_prompt: Optional[str] = None,
+        insert_internal_links: bool = True,
+        insert_stock_images: bool = False,
+        db=None,
+        current_post_id: Optional[int] = None,
     ) -> dict:
         """
         AI 블로그 포스트 생성
@@ -160,6 +164,10 @@ class ContentGenerator:
             target_word_count: 목표 단어 수
             custom_system_prompt: 커스텀 시스템 프롬프트
             custom_user_prompt: 커스텀 사용자 프롬프트
+            insert_internal_links: 내부링크 자동 삽입 여부
+            insert_stock_images: 스톡 이미지 자동 삽입 여부
+            db: 데이터베이스 세션 (내부링크 삽입 시 필요)
+            current_post_id: 현재 포스트 ID (내부링크에서 자신 제외용)
 
         Returns:
             생성된 포스트 데이터 딕셔너리
@@ -193,6 +201,36 @@ class ContentGenerator:
         # SEO 슬러그 생성
         slug = seo_optimizer.generate_slug(primary_keyword)
 
+        # 내부링크 자동 삽입
+        internal_link_count = 0
+        if insert_internal_links and db is not None:
+            try:
+                from app.services.internal_linker import internal_linker
+                html_content, internal_link_count = await internal_linker.process_content(
+                    content=html_content,
+                    primary_keyword=primary_keyword,
+                    db=db,
+                    current_post_id=current_post_id,
+                )
+                if internal_link_count:
+                    logger.info(f"내부링크 {internal_link_count}개 삽입 완료")
+            except Exception as e:
+                logger.warning(f"내부링크 삽입 중 오류 (계속 진행): {e}")
+
+        # 스톡 이미지 자동 삽입
+        inserted_image_count = 0
+        if insert_stock_images:
+            try:
+                from app.services.stock_image import stock_image_service
+                html_content, inserted_image_count = await stock_image_service.enrich_content_with_images(
+                    content=html_content,
+                    primary_keyword=primary_keyword,
+                )
+                if inserted_image_count:
+                    logger.info(f"스톡 이미지 {inserted_image_count}개 삽입 완료")
+            except Exception as e:
+                logger.warning(f"스톡 이미지 삽입 중 오류 (계속 진행): {e}")
+
         # SEO 분석
         seo_results = seo_optimizer.analyze_content(
             content=html_content,
@@ -216,6 +254,8 @@ class ContentGenerator:
             "readability_score": seo_results["readability_score"],
             "seo_issues": seo_results["issues"],
             "seo_suggestions": seo_results["suggestions"],
+            "internal_link_count": internal_link_count,
+            "inserted_image_count": inserted_image_count,
         }
 
     def _extract_meta_description(self, content: str) -> str:

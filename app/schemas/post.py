@@ -57,6 +57,8 @@ class PostGenerateRequest(BaseModel):
     template_id: Optional[int] = Field(None, description="템플릿 ID")
     target_word_count: int = Field(2000, ge=500, le=5000, description="목표 단어 수")
     language: str = Field("ko", description="언어 코드")
+    insert_internal_links: bool = Field(True, description="내부링크 자동 삽입 여부")
+    insert_stock_images: bool = Field(False, description="Unsplash 스톡 이미지 자동 삽입 여부")
 
 
 class PostPublishRequest(BaseModel):
