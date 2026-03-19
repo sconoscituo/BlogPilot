@@ -55,6 +55,11 @@ class Settings:
     # Unsplash 이미지 설정
     UNSPLASH_ACCESS_KEY: str = os.getenv("UNSPLASH_ACCESS_KEY", "")
 
+    # 네이버 블로그 설정
+    NAVER_CLIENT_ID: str = os.getenv("NAVER_CLIENT_ID", "")
+    NAVER_CLIENT_SECRET: str = os.getenv("NAVER_CLIENT_SECRET", "")
+    NAVER_REDIRECT_URI: str = os.getenv("NAVER_REDIRECT_URI", "http://localhost:8000/auth/naver/callback")
+
     @property
     def wordpress_api_url(self) -> str:
         """WordPress REST API 기본 URL"""

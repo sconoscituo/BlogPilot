@@ -12,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.database import init_db
-from app.routers import keywords, posts, publish, schedules, templates, pages, analytics, competitors
+from app.routers import keywords, posts, publish, schedules, templates, pages, analytics, competitors, naver
 from app.services.scheduler import publish_scheduler
 
 # 로깅 설정
@@ -118,6 +118,7 @@ app.include_router(schedules.router)       # /api/schedules
 app.include_router(templates.router)       # /api/templates
 app.include_router(analytics.router)       # /analytics, /api/analytics
 app.include_router(competitors.router)     # /competitors, /api/competitors
+app.include_router(naver.router)           # /auth/naver, /posts/naver
 
 
 @app.get("/health")
